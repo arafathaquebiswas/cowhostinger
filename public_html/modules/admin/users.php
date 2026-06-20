@@ -140,8 +140,6 @@ if ($search !== '') {
 }
 $where_sql = implode(' AND ', $where);
 
-$total = (int)$db->prepare("SELECT COUNT(*) FROM users WHERE {$where_sql}")
-              ->execute($params) ? $db->prepare("SELECT COUNT(*) FROM users WHERE {$where_sql}") : null;
 $cnt_stmt = $db->prepare("SELECT COUNT(*) FROM users WHERE {$where_sql}");
 $cnt_stmt->execute($params);
 $total = (int)$cnt_stmt->fetchColumn();

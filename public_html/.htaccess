@@ -5,55 +5,115 @@
 Options -Indexes
 ServerSignature Off
 
-# Security headers
+# ── Security headers ──────────────────────────────────────────
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options   "nosniff"
     Header always set X-Frame-Options          "SAMEORIGIN"
     Header always set X-XSS-Protection         "1; mode=block"
     Header always set Referrer-Policy          "strict-origin-when-cross-origin"
     Header always set Permissions-Policy       "geolocation=(), microphone=(), camera=()"
+    Header always unset X-Powered-By
+    Header always unset Server
+
+    # Content Security Policy — tighten 'unsafe-inline' after migrating to external scripts
+    Header always set Content-Security-Policy \
+        "default-src 'self'; \
+         script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; \
+         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
+         font-src 'self' https://fonts.gstatic.com; \
+         img-src 'self' data: blob:; \
+         connect-src 'self'; \
+         frame-ancestors 'none'; \
+         base-uri 'self'; \
+         form-action 'self';"
+
+    # HSTS — enable ONLY after HTTPS is confirmed working on production
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+    # No caching for authenticated pages
+    <FilesMatch "\.php$">
+        Header always set Cache-Control "no-store, no-cache, must-revalidate, private"
+        Header always set Pragma "no-cache"
+    </FilesMatch>
+
+    # Long-lived cache for fingerprinted static assets
+    <FilesMatch "\.(css|js|woff2?)$">
+        Header always set Cache-Control "public, max-age=2592000, immutable"
+    </FilesMatch>
+    <FilesMatch "\.(jpg|jpeg|png|webp|gif|ico|svg)$">
+        Header always set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
 </IfModule>
 
-# Block direct access to includes/
+# ── HTTPS redirect (uncomment in production) ──────────────────
+# <IfModule mod_rewrite.c>
+#     RewriteEngine On
+#     RewriteCond %{HTTPS} off
+#     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# </IfModule>
+
+# ── Access control ────────────────────────────────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    # Block direct access to includes/
     RewriteRule ^includes/ - [F,L]
+    # Block access to logs/
+    RewriteRule ^logs/ - [F,L]
 </IfModule>
 
 # Protect sensitive files
-<FilesMatch "\.(sql|env|log|md|git|htpasswd|json|lock|ini|bak)$">
+<FilesMatch "\.(sql|env|log|md|git|htpasswd|json|lock|ini|bak|sh|config)$">
     Order allow,deny
     Deny from all
 </FilesMatch>
 
-# PHP settings
+# ── PHP settings ──────────────────────────────────────────────
 <IfModule mod_php.c>
-    php_flag display_errors     Off
-    php_flag log_errors         On
-    php_value session.use_strict_mode 1
-    php_value session.cookie_httponly 1
-    php_value session.cookie_samesite Strict
+    php_flag  display_errors            Off
+    php_flag  log_errors                On
+    php_value post_max_size             10M
+    php_value upload_max_filesize       5M
+    php_value max_execution_time        30
+    php_value session.use_strict_mode   1
+    php_value session.cookie_httponly   1
+    php_value session.cookie_samesite   Strict
+    php_value session.gc_maxlifetime    3600
 </IfModule>
 
 <IfModule mod_php8.c>
-    php_flag display_errors     Off
-    php_flag log_errors         On
-    php_value session.use_strict_mode 1
-    php_value session.cookie_httponly 1
-    php_value session.cookie_samesite Strict
+    php_flag  display_errors            Off
+    php_flag  log_errors                On
+    php_value post_max_size             10M
+    php_value upload_max_filesize       5M
+    php_value max_execution_time        30
+    php_value session.use_strict_mode   1
+    php_value session.cookie_httponly   1
+    php_value session.cookie_samesite   Strict
+    php_value session.gc_maxlifetime    3600
 </IfModule>
 
-# Enable gzip compression
+# ── Compression ───────────────────────────────────────────────
 <IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript
+    AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json text/xml application/xml
+    BrowserMatch ^Mozilla/4 gzip-only-text/html
+    BrowserMatch ^Mozilla/4\.0[678] no-gzip
+    BrowserMatch \bMSIE !no-gzip !gzip-only-text/html
 </IfModule>
 
-# Cache static assets
+# ── Browser caching (fallback if mod_headers unavailable) ─────
 <IfModule mod_expires.c>
     ExpiresActive On
-    ExpiresByType text/css                  "access plus 1 month"
-    ExpiresByType application/javascript    "access plus 1 month"
-    ExpiresByType image/jpeg                "access plus 1 year"
-    ExpiresByType image/png                 "access plus 1 year"
-    ExpiresByType image/webp                "access plus 1 year"
+    ExpiresByType text/css               "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/jpeg             "access plus 1 year"
+    ExpiresByType image/png              "access plus 1 year"
+    ExpiresByType image/webp             "access plus 1 year"
+    ExpiresByType image/svg+xml         "access plus 1 year"
+    ExpiresByType font/woff2             "access plus 1 year"
+    ExpiresByType text/html              "access plus 0 seconds"
 </IfModule>
+
+# ── Custom error pages ────────────────────────────────────────
+ErrorDocument 404 /errors/404.php
+ErrorDocument 403 /errors/403.php
+ErrorDocument 500 /errors/500.php

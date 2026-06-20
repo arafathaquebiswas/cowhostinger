@@ -13,8 +13,10 @@ define('DB_CHARSET', 'utf8mb4');
 
 // Application
 define('APP_NAME',    'Cow Management & Diagnosis System');
-define('APP_URL',     'http://localhost:8080'); // No trailing slash
+define('APP_URL',     'http://localhost:8080'); // No trailing slash — change to https:// in production
 define('APP_VERSION', '1.0.0');
+define('APP_ENV',     'development'); // 'development' | 'production'
+define('APP_DEBUG',   APP_ENV === 'development');
 
 // Session
 define('SESSION_LIFETIME', 3600); // 1 hour in seconds
@@ -30,7 +32,12 @@ define('BASE_PATH', dirname(__DIR__)); // Absolute filesystem path to public_htm
 // Security
 define('CSRF_TOKEN_NAME', '_csrf_token');
 
-// Error reporting (0 in production)
-error_reporting(0);
-ini_set('display_errors', '0');
-ini_set('log_errors',     '1');
+// Error reporting
+if (APP_DEBUG) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', '1');
+} else {
+    error_reporting(0);
+    ini_set('display_errors', '0');
+}
+ini_set('log_errors', '1');

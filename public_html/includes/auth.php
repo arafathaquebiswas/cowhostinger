@@ -13,22 +13,81 @@ function startSecureSession(): void {
     session_start();
 }
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+
+function _getClientIp(): string {
+    foreach (['HTTP_CF_CONNECTING_IP','HTTP_X_FORWARDED_FOR','REMOTE_ADDR'] as $k) {
+        if (!empty($_SERVER[$k])) {
+            $ip = trim(explode(',', $_SERVER[$k])[0]);
+            if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+        }
+    }
+    return '0.0.0.0';
+}
+
+function _checkRateLimit(string $identifier): ?string {
+    $db  = getDB();
+    $ip  = _getClientIp();
+    $win = date('Y-m-d H:i:s', time() - 900); // 15-minute window
+
+    $cnt = $db->prepare('SELECT COUNT(*) FROM login_attempts WHERE ip_address=? AND attempted_at > ?');
+    $cnt->execute([$ip, $win]);
+    $ip_count = (int)$cnt->fetchColumn();
+    if ($ip_count >= 10) {
+        return 'Too many login attempts from your IP. Please wait 15 minutes.';
+    }
+
+    $cnt2 = $db->prepare('SELECT COUNT(*) FROM login_attempts WHERE identifier=? AND attempted_at > ?');
+    $cnt2->execute([$identifier, $win]);
+    if ((int)$cnt2->fetchColumn() >= 5) {
+        return 'Too many failed attempts for this account. Please wait 15 minutes.';
+    }
+    return null;
+}
+
+function _recordFailedAttempt(string $identifier): void {
+    $db = getDB();
+    $db->prepare('INSERT INTO login_attempts (ip_address, identifier) VALUES (?,?)')
+       ->execute([_getClientIp(), $identifier]);
+    // Prune records older than 1 hour (1 in 20 chance to avoid overhead every request)
+    if (random_int(1, 20) === 1) {
+        $db->exec("DELETE FROM login_attempts WHERE attempted_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+    }
+}
+
+function _clearAttempts(string $identifier): void {
+    $db = getDB();
+    $db->prepare('DELETE FROM login_attempts WHERE identifier=? OR ip_address=?')
+       ->execute([$identifier, _getClientIp()]);
+}
+
+// ── Login functions ───────────────────────────────────────────────────────────
+
 function login(string $email, string $password): array {
-    $db   = getDB();
+    $email = strtolower(trim($email));
+    $db    = getDB();
+
+    if ($msg = _checkRateLimit($email)) {
+        return ['success' => false, 'message' => $msg];
+    }
+
     $stmt = $db->prepare(
         'SELECT id, name, email, phone, password_hash, role, status, farm_id, is_owner
          FROM users WHERE email = ? LIMIT 1'
     );
-    $stmt->execute([strtolower(trim($email))]);
+    $stmt->execute([$email]);
     $user = $stmt->fetch();
 
     if (!$user || !password_verify($password, $user['password_hash'])) {
+        _recordFailedAttempt($email);
         return ['success' => false, 'message' => 'Invalid email or password.'];
     }
     if ($user['status'] !== 'active') {
+        _recordFailedAttempt($email);
         return ['success' => false, 'message' => 'Your account is inactive. Contact the administrator.'];
     }
 
+    _clearAttempts($email);
     session_regenerate_id(true);
     _setUserSession($user);
     auditLog((int)$user['id'], 'LOGIN', 'users', (int)$user['id']);
@@ -44,7 +103,15 @@ function login(string $email, string $password): array {
 
 // Login by phone number + farm code (Bangladesh-friendly)
 function loginByPhone(string $farm_code, string $phone, string $password): array {
-    $db   = getDB();
+    $farm_code  = strtoupper(trim($farm_code));
+    $phone      = trim($phone);
+    $identifier = $farm_code . ':' . $phone;
+    $db         = getDB();
+
+    if ($msg = _checkRateLimit($identifier)) {
+        return ['success' => false, 'message' => $msg];
+    }
+
     $stmt = $db->prepare(
         'SELECT u.id, u.name, u.email, u.phone, u.password_hash, u.role, u.status, u.farm_id, u.is_owner
          FROM users u
@@ -52,16 +119,18 @@ function loginByPhone(string $farm_code, string $phone, string $password): array
          WHERE f.farm_code = ? AND u.phone = ?
          LIMIT 1'
     );
-    $stmt->execute([strtoupper(trim($farm_code)), trim($phone)]);
+    $stmt->execute([$farm_code, $phone]);
     $user = $stmt->fetch();
 
     if (!$user || !password_verify($password, $user['password_hash'])) {
+        _recordFailedAttempt($identifier);
         return ['success' => false, 'message' => 'Invalid Farm Code, phone, or password.'];
     }
     if ($user['status'] !== 'active') {
         return ['success' => false, 'message' => 'Your account is inactive. Contact the farm owner.'];
     }
 
+    _clearAttempts($identifier);
     session_regenerate_id(true);
     _setUserSession($user);
     auditLog((int)$user['id'], 'LOGIN_PHONE', 'users', (int)$user['id']);
