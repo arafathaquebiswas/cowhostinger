@@ -111,9 +111,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── Load data ─────────────────────────────────────────────────────
 
 $feed_items = $db->query(
-    "SELECT id, item_name, quantity, unit, reorder_threshold, last_updated
+    "SELECT id, item_name, quantity, unit, purchase_price, supplier, purchase_date, reorder_threshold, last_updated
      FROM feed_inventory ORDER BY item_name ASC"
 )->fetchAll();
+
+// Monthly feed purchase cost from finance_transactions
+$feed_cost_month = (float)$db->query(
+    "SELECT COALESCE(SUM(amount), 0) FROM finance_transactions
+     WHERE category = 'Feed Purchase'
+       AND MONTH(transaction_date) = MONTH(CURDATE())
+       AND YEAR(transaction_date)  = YEAR(CURDATE())"
+)->fetchColumn();
 
 $medicine_items = $db->query(
     "SELECT id, item_name, quantity, unit, expiry_date, reorder_threshold, last_updated,
@@ -198,6 +206,10 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div class="kpi-value"><?= $expired_med ?></div>
     </div>
     <?php endif; ?>
+    <div class="kpi-card" style="--kpi-color:#7C3AED;--kpi-soft:#F5F3FF">
+        <div class="kpi-label">Feed Cost (This Month)</div>
+        <div class="kpi-value" style="font-size:1.1rem"><?= e(formatCurrency($feed_cost_month)) ?></div>
+    </div>
 </div>
 
 <!-- Tabs -->
@@ -230,6 +242,8 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <tr>
                     <th>Item Name</th>
                     <th>Quantity</th>
+                    <th>Price/Unit</th>
+                    <th>Supplier</th>
                     <th>Threshold</th>
                     <th>Last Updated</th>
                     <?php if (hasRole(['admin','worker'])): ?><th style="min-width:200px">Adjust Stock</th><?php endif; ?>
@@ -244,6 +258,8 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <?= feed_stock_badge($item) ?>
                 </td>
                 <td><?= e(number_format((float)$item['quantity'], 2)) ?> <?= e($item['unit']) ?></td>
+                <td><?= $item['purchase_price'] ? e(formatCurrency((float)$item['purchase_price'])) : '—' ?></td>
+                <td style="font-size:.82rem"><?= $item['supplier'] ? e($item['supplier']) : '—' ?></td>
                 <td><?= (float)$item['reorder_threshold'] > 0 ? e(number_format((float)$item['reorder_threshold'], 2)) . ' ' . e($item['unit']) : '—' ?></td>
                 <td style="font-size:.82rem"><?= e(formatDateTime($item['last_updated'])) ?></td>
                 <?php if (hasRole(['admin','worker'])): ?>

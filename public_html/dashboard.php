@@ -89,6 +89,26 @@ $is_accountant = in_array($user['role'], ['admin', 'accountant'], true);
         <div class="kpi-value" id="kpi_net_profit"><span class="kpi-loader"></span></div>
         <div class="kpi-label">Net Profit This Month</div>
     </a>
+    <a href="/modules/equipment/index.php?status=damaged" class="kpi-card" style="--kpi-color:#DC2626;--kpi-soft:#FEF2F2">
+        <div class="kpi-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div class="kpi-value" id="kpi_equip_damaged"><span class="kpi-loader"></span></div>
+        <div class="kpi-label">Damaged Equipment</div>
+    </a>
+    <a href="/modules/feed_medicine/index.php?tab=feed" class="kpi-card" style="--kpi-color:#7C3AED;--kpi-soft:#F5F3FF">
+        <div class="kpi-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg></div>
+        <div class="kpi-value" id="kpi_feed_cost"><span class="kpi-loader"></span></div>
+        <div class="kpi-label">Feed Cost This Month</div>
+    </a>
+    <a href="/modules/finance/index.php?category=Equipment+Sale" class="kpi-card" style="--kpi-color:#2563EB;--kpi-soft:#EFF6FF">
+        <div class="kpi-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div>
+        <div class="kpi-value" id="kpi_equip_sales"><span class="kpi-loader"></span></div>
+        <div class="kpi-label">Equipment Sales (Month)</div>
+    </a>
+    <a href="/modules/finance/index.php" class="kpi-card" style="--kpi-color:#0891B2;--kpi-soft:#ECFEFF">
+        <div class="kpi-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div class="kpi-value" id="kpi_prev_profit"><span class="kpi-loader"></span></div>
+        <div class="kpi-label">Prev Month Profit</div>
+    </a>
 </div>
 
 <!-- Charts row -->
@@ -180,12 +200,20 @@ fetch('/api/get_dashboard_kpis.php')
         set('kpi_milk_revenue',  '৳ ' + d.milk_revenue);
         set('kpi_feed_alerts',   d.feed_alerts);
         set('kpi_med_alerts',    d.med_alerts);
-        set('kpi_equip_maint',   d.equip_maint);
+        set('kpi_equip_maint',    d.equip_maint);
+        set('kpi_equip_damaged',  d.damaged_equipment);
+        set('kpi_feed_cost',      '৳ ' + d.feed_cost_month);
+        set('kpi_equip_sales',    '৳ ' + d.equip_sales_month);
 
         var profitEl = document.getElementById('kpi_net_profit');
         if (profitEl) {
             profitEl.textContent = '৳ ' + d.net_profit;
             profitEl.style.color = d.net_profit_raw < 0 ? 'var(--danger)' : 'var(--success)';
+        }
+        var prevEl = document.getElementById('kpi_prev_profit');
+        if (prevEl) {
+            prevEl.textContent = '৳ ' + d.prev_month_profit;
+            prevEl.style.color = d.prev_month_profit_raw < 0 ? 'var(--danger)' : 'var(--success)';
         }
     })
     .catch(function() {

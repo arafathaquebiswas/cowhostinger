@@ -20,16 +20,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete' && hasRole(['admin'])) {
         $del_id = (int)($_POST['cow_id'] ?? 0);
         if ($del_id > 0) {
-            $sel = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ?");
+            $sel = $db->prepare("SELECT id, tag_number, status FROM cows WHERE id = ?");
             $sel->execute([$del_id]);
             $del_cow = $sel->fetch();
             if ($del_cow) {
-                try {
+                $uid = (int)$_SESSION['user_id'];
+
+                // Check for related records in any FK-linked table
+                $has_records = false;
+                $checks = [
+                    ['cow_sales',        'cow_id'],
+                    ['milk_records',     'cow_id'],
+                    ['treatments',       'cow_id'],
+                    ['breeding_records', 'cow_id'],
+                    ['diagnosis_records','cow_id'],
+                    ['meat_sales',       'cow_id'],
+                ];
+                foreach ($checks as [$table, $col]) {
+                    $chk = $db->prepare("SELECT 1 FROM {$table} WHERE {$col} = ? LIMIT 1");
+                    $chk->execute([$del_id]);
+                    if ($chk->fetchColumn()) { $has_records = true; break; }
+                }
+
+                if ($has_records) {
+                    // Soft-delete: archive the cow
+                    $db->prepare("UPDATE cows SET status='archived', deleted_at=NOW() WHERE id=?")
+                       ->execute([$del_id]);
+                    auditLog($uid, 'ARCHIVE_COW', 'cows', $del_id, $del_cow, ['status'=>'archived']);
+                    flashMessage('success', "Cow #{$del_cow['tag_number']} archived (has existing records — cannot be permanently deleted).");
+                } else {
+                    // No related records — hard delete is safe
                     $db->prepare("DELETE FROM cows WHERE id = ?")->execute([$del_id]);
-                    auditLog((int)$_SESSION['user_id'], 'DELETE_COW', 'cows', $del_id, $del_cow, null);
-                    flashMessage('success', "Cow #{$del_cow['tag_number']} deleted permanently.");
-                } catch (PDOException $e) {
-                    flashMessage('error', "Cannot delete cow #{$del_cow['tag_number']} — it has sales or financial records attached.");
+                    auditLog($uid, 'DELETE_COW', 'cows', $del_id, $del_cow, null);
+                    flashMessage('success', "Cow #{$del_cow['tag_number']} permanently deleted.");
                 }
             }
         }
@@ -44,12 +67,12 @@ $status   = $_GET['status'] ?? '';
 $page     = max(1, (int)($_GET['page'] ?? 1));
 $per_page = 25;
 
-$valid_statuses = ['active','pregnant','lactating','dry','sick','quarantine','ready_for_sale','sold','deceased'];
+$valid_statuses = ['active','pregnant','lactating','dry','sick','quarantine','ready_for_sale','sold','deceased','archived'];
 if (!in_array($status, $valid_statuses, true)) {
     $status = '';
 }
 
-// Build WHERE clause
+// Build WHERE clause; exclude archived cows from default view
 $where  = ['1=1'];
 $params = [];
 if ($search !== '') {
@@ -60,6 +83,8 @@ if ($search !== '') {
 if ($status !== '') {
     $where[]  = 'status = ?';
     $params[] = $status;
+} else {
+    $where[] = "status != 'archived'";
 }
 $where_sql = implode(' AND ', $where);
 
@@ -88,7 +113,7 @@ $status_counts = [];
 foreach ($sc_rows as $r) {
     $status_counts[$r['status']] = (int)$r['cnt'];
 }
-$total_all = (int)$db->query("SELECT COUNT(*) FROM cows")->fetchColumn();
+$total_all = (int)$db->query("SELECT COUNT(*) FROM cows WHERE status != 'archived'")->fetchColumn();
 
 // Helpers
 function cow_status_badge(string $s): string {
@@ -102,6 +127,7 @@ function cow_status_badge(string $s): string {
         'ready_for_sale' => 'badge-yellow',
         'sold'           => 'badge-gray',
         'deceased'       => 'badge-gray',
+        'archived'       => 'badge-gray',
         default          => 'badge-gray',
     };
 }
@@ -138,6 +164,7 @@ $qs = static fn(array $p): string =>
         'dry'            => ['Dry',           $status_counts['dry']            ?? 0],
         'ready_for_sale' => ['Ready for Sale',$status_counts['ready_for_sale'] ?? 0],
         'sold'           => ['Sold',          $status_counts['sold']           ?? 0],
+        'archived'       => ['Archived',      $status_counts['archived']       ?? 0],
     ];
     foreach ($quick as $sval => [$slabel, $scnt]):
         $is_active_pill = $status === $sval;
@@ -244,16 +271,18 @@ $qs = static fn(array $p): string =>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </a>
                     <?php endif; ?>
-                    <?php if (hasRole(['admin'])): ?>
+                    <?php if (hasRole(['admin']) && $cow['status'] !== 'archived'): ?>
                     <form method="POST" style="display:inline"
-                          onsubmit="return confirm('Permanently delete cow #<?= e(addslashes($cow['tag_number'])) ?>? This cannot be undone.')">
+                          onsubmit="return confirm('Remove cow #<?= e(addslashes($cow['tag_number'])) ?>?\n\nIf this cow has existing records, it will be archived.\nOtherwise it will be permanently deleted.')">
                         <?= csrfField() ?>
                         <input type="hidden" name="action"  value="delete">
                         <input type="hidden" name="cow_id"  value="<?= $cow['id'] ?>">
-                        <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Delete or Archive">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                         </button>
                     </form>
+                    <?php elseif (hasRole(['admin']) && $cow['status'] === 'archived'): ?>
+                    <span class="badge badge-gray" style="font-size:.7rem">Archived</span>
                     <?php endif; ?>
                 </div>
             </td>

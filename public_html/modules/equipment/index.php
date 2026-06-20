@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'update_status' && hasRole(['admin']) && $eq_id > 0) {
         $new_status = sanitize($_POST['new_status'] ?? '');
-        $valid      = ['operational', 'maintenance', 'damaged'];
+        $valid      = ['operational', 'maintenance', 'damaged', 'disposed'];
         if (in_array($new_status, $valid, true)) {
             $sel = $db->prepare("SELECT id, name, status FROM equipment WHERE id = ?");
             $sel->execute([$eq_id]);
@@ -65,7 +65,7 @@ $search        = trim($_GET['search'] ?? '');
 $page          = max(1, (int)($_GET['page'] ?? 1));
 $per_page      = 20;
 
-$valid_statuses = ['operational', 'maintenance', 'damaged'];
+$valid_statuses = ['operational', 'maintenance', 'damaged', 'sold', 'disposed'];
 if (!in_array($filter_status, $valid_statuses, true)) $filter_status = '';
 
 $where  = ['1=1'];
@@ -107,6 +107,8 @@ function equipment_status_badge(string $s): string {
         'operational' => 'badge-green',
         'maintenance' => 'badge-yellow',
         'damaged'     => 'badge-red',
+        'sold'        => 'badge-blue',
+        'disposed'    => 'badge-gray',
         default       => 'badge-gray',
     };
 }
@@ -129,6 +131,8 @@ $extra_js = ['https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
 $pie_op  = $status_counts['operational'] ?? 0;
 $pie_mn  = $status_counts['maintenance'] ?? 0;
 $pie_dmg = $status_counts['damaged']     ?? 0;
+$pie_sld = $status_counts['sold']        ?? 0;
+$pie_dis = $status_counts['disposed']    ?? 0;
 
 $inline_js = <<<JS
 (function () {
@@ -137,10 +141,10 @@ $inline_js = <<<JS
     new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Operational', 'In Maintenance', 'Damaged'],
+            labels: ['Operational', 'In Maintenance', 'Damaged', 'Sold', 'Disposed'],
             datasets: [{
-                data: [{$pie_op}, {$pie_mn}, {$pie_dmg}],
-                backgroundColor: ['#16A34A','#D97706','#DC2626'],
+                data: [{$pie_op}, {$pie_mn}, {$pie_dmg}, {$pie_sld}, {$pie_dis}],
+                backgroundColor: ['#16A34A','#D97706','#DC2626','#2563EB','#9CA3AF'],
                 hoverOffset: 6,
                 borderWidth: 2,
                 borderColor: '#fff',
@@ -184,7 +188,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 </div>
 
 <!-- Summary KPIs -->
-<div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(145px,1fr));margin-bottom:1.25rem">
+<div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin-bottom:1.25rem">
     <div class="kpi-card" style="--kpi-color:#16A34A;--kpi-soft:#F0FDF4">
         <div class="kpi-label">Operational</div>
         <div class="kpi-value"><?= $status_counts['operational'] ?? 0 ?></div>
@@ -197,6 +201,18 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div class="kpi-label">Damaged</div>
         <div class="kpi-value"><?= $status_counts['damaged'] ?? 0 ?></div>
     </div>
+    <?php if (($status_counts['sold'] ?? 0) > 0): ?>
+    <div class="kpi-card" style="--kpi-color:#2563EB;--kpi-soft:#EFF6FF">
+        <div class="kpi-label">Sold</div>
+        <div class="kpi-value"><?= $status_counts['sold'] ?></div>
+    </div>
+    <?php endif; ?>
+    <?php if (($status_counts['disposed'] ?? 0) > 0): ?>
+    <div class="kpi-card" style="--kpi-color:#6B7280;--kpi-soft:#F3F4F6">
+        <div class="kpi-label">Disposed</div>
+        <div class="kpi-value"><?= $status_counts['disposed'] ?></div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Status chart -->
@@ -208,7 +224,14 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         </div>
         <div>
             <div style="font-weight:600;font-size:.95rem;margin-bottom:.75rem">Equipment Status Overview</div>
-            <?php foreach (['operational'=>['#16A34A','Operational'],'maintenance'=>['#D97706','In Maintenance'],'damaged'=>['#DC2626','Damaged']] as $sv=>[$color,$label]): ?>
+            <?php foreach ([
+                'operational' => ['#16A34A','Operational'],
+                'maintenance' => ['#D97706','In Maintenance'],
+                'damaged'     => ['#DC2626','Damaged'],
+                'sold'        => ['#2563EB','Sold'],
+                'disposed'    => ['#9CA3AF','Disposed'],
+            ] as $sv => [$color, $label]): ?>
+            <?php if (($status_counts[$sv] ?? 0) > 0): ?>
             <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem">
                 <div style="width:12px;height:12px;border-radius:50%;background:<?= $color ?>;flex-shrink:0"></div>
                 <span style="font-size:.88rem"><?= $label ?></span>
@@ -217,6 +240,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <?= $total_all > 0 ? round(($status_counts[$sv] ?? 0) / $total_all * 100) : 0 ?>%
                 </span>
             </div>
+            <?php endif; ?>
             <?php endforeach; ?>
         </div>
     </div>
@@ -227,7 +251,13 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem">
     <a href="<?= e($qs(['search'=>$search])) ?>"
        class="btn btn-sm <?= $filter_status === '' ? 'btn-primary' : 'btn-secondary' ?>">All</a>
-    <?php foreach (['operational'=>'Operational','maintenance'=>'In Maintenance','damaged'=>'Damaged'] as $sval=>$slabel): ?>
+    <?php foreach ([
+        'operational' => 'Operational',
+        'maintenance' => 'In Maintenance',
+        'damaged'     => 'Damaged',
+        'sold'        => 'Sold',
+        'disposed'    => 'Disposed',
+    ] as $sval => $slabel): ?>
     <a href="<?= e($qs(['status'=>$sval,'search'=>$search])) ?>"
        class="btn btn-sm <?= $filter_status===$sval ? 'btn-primary' : 'btn-secondary' ?>">
         <?= $slabel ?> <span style="opacity:.7">(<?= $status_counts[$sval] ?? 0 ?>)</span>
@@ -305,30 +335,64 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                        class="btn btn-sm btn-secondary" title="Edit">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </a>
+
+                    <?php if (!in_array($eq['status'], ['sold', 'disposed'], true)): ?>
+                    <!-- Log Maintenance / Repair Cost -->
+                    <a href="/modules/equipment/log_cost.php?id=<?= $eq['id'] ?>"
+                       class="btn btn-sm btn-warning" title="Log Maintenance / Repair Cost">৳</a>
+
+                    <?php if ($eq['status'] !== 'sold'): ?>
+                    <!-- Sell -->
+                    <a href="/modules/equipment/sell.php?id=<?= $eq['id'] ?>"
+                       class="btn btn-sm btn-secondary" title="Record Sale"
+                       style="background:#EFF6FF;color:#2563EB;border-color:#BFDBFE">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                    </a>
+                    <?php endif; ?>
+
                     <!-- Status cycle button -->
                     <?php
                     $next_status = match($eq['status']) {
                         'operational' => 'maintenance',
                         'maintenance' => 'operational',
                         'damaged'     => 'maintenance',
-                        default       => 'operational',
+                        default       => null,
                     };
-                    $next_label = match($eq['status']) {
-                        'operational' => 'Send to Maintenance',
-                        'maintenance' => 'Mark Operational',
-                        'damaged'     => 'Start Repair',
-                        default       => 'Update Status',
-                    };
-                    ?>
+                    if ($next_status): ?>
                     <form method="POST" style="display:inline">
                         <?= csrfField() ?>
                         <input type="hidden" name="action"       value="update_status">
                         <input type="hidden" name="equipment_id" value="<?= $eq['id'] ?>">
                         <input type="hidden" name="new_status"   value="<?= e($next_status) ?>">
+                        <?php
+                        $next_label = match($eq['status']) {
+                            'operational' => 'Send to Maintenance',
+                            'maintenance' => 'Mark Operational',
+                            'damaged'     => 'Start Repair',
+                            default       => 'Update',
+                        };
+                        ?>
                         <button type="submit" class="btn btn-sm btn-warning" title="<?= e($next_label) ?>">
                             <?= $eq['status'] === 'operational' ? '🔧' : ($eq['status'] === 'damaged' ? '🛠️' : '✓') ?>
                         </button>
                     </form>
+                    <?php endif; ?>
+
+                    <?php if ($eq['status'] === 'damaged'): ?>
+                    <!-- Dispose -->
+                    <form method="POST" style="display:inline"
+                          onsubmit="return confirm('Mark <?= e(addslashes($eq['name'])) ?> as disposed? This cannot be undone.')">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action"       value="update_status">
+                        <input type="hidden" name="equipment_id" value="<?= $eq['id'] ?>">
+                        <input type="hidden" name="new_status"   value="disposed">
+                        <button type="submit" class="btn btn-sm btn-secondary" title="Mark as Disposed"
+                                style="background:#F3F4F6;color:#6B7280;border-color:#D1D5DB">🗑️</button>
+                    </form>
+                    <?php endif; ?>
+
+                    <?php endif; // not sold/disposed ?>
+
                     <form method="POST" style="display:inline"
                           onsubmit="return confirm('Delete <?= e(addslashes($eq['name'])) ?>?')">
                         <?= csrfField() ?>

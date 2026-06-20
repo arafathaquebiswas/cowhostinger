@@ -68,16 +68,52 @@ $net_profit = (float)$db->query(
        AND YEAR(transaction_date)  = YEAR(CURDATE())"
 )->fetchColumn();
 
+// 11. Damaged equipment count
+$damaged_equipment = (int)$db->query(
+    "SELECT COUNT(*) FROM equipment WHERE status = 'damaged'"
+)->fetchColumn();
+
+// 12. Feed cost this month (from finance_transactions)
+$feed_cost_month = (float)$db->query(
+    "SELECT COALESCE(SUM(amount), 0) FROM finance_transactions
+     WHERE category = 'Feed Purchase'
+       AND MONTH(transaction_date) = MONTH(CURDATE())
+       AND YEAR(transaction_date)  = YEAR(CURDATE())"
+)->fetchColumn();
+
+// 13. Equipment sales this month revenue
+$equip_sales_month = 0.0;
+try {
+    $equip_sales_month = (float)$db->query(
+        "SELECT COALESCE(SUM(sale_price), 0) FROM equipment_sales
+         WHERE MONTH(sale_date) = MONTH(CURDATE())
+           AND YEAR(sale_date)  = YEAR(CURDATE())"
+    )->fetchColumn();
+} catch (PDOException $e) { /* table may not exist on older installs */ }
+
+// 14. Previous month net profit
+$prev_month_profit = (float)$db->query(
+    "SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END), 0)
+     FROM finance_transactions
+     WHERE MONTH(transaction_date) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+       AND YEAR(transaction_date)  = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))"
+)->fetchColumn();
+
 jsonResponse([
-    'total_cows'    => $total_cows,
-    'healthy_cows'  => $healthy_cows,
-    'sick_cows'     => $sick_cows,
-    'pregnant_cows' => $pregnant_cows,
-    'milk_today_l'  => round($milk_today, 1),
-    'milk_revenue'  => number_format($milk_revenue, 0),
-    'feed_alerts'   => $feed_alerts,
-    'med_alerts'    => $med_alerts,
-    'equip_maint'   => $equip_maint,
-    'net_profit'    => ($net_profit >= 0 ? '+' : '') . number_format($net_profit, 0),
-    'net_profit_raw' => $net_profit,
+    'total_cows'         => $total_cows,
+    'healthy_cows'       => $healthy_cows,
+    'sick_cows'          => $sick_cows,
+    'pregnant_cows'      => $pregnant_cows,
+    'milk_today_l'       => round($milk_today, 1),
+    'milk_revenue'       => number_format($milk_revenue, 0),
+    'feed_alerts'        => $feed_alerts,
+    'med_alerts'         => $med_alerts,
+    'equip_maint'        => $equip_maint,
+    'net_profit'         => ($net_profit >= 0 ? '+' : '') . number_format($net_profit, 0),
+    'net_profit_raw'     => $net_profit,
+    'damaged_equipment'  => $damaged_equipment,
+    'feed_cost_month'    => number_format($feed_cost_month, 0),
+    'equip_sales_month'  => number_format($equip_sales_month, 0),
+    'prev_month_profit'  => ($prev_month_profit >= 0 ? '+' : '') . number_format($prev_month_profit, 0),
+    'prev_month_profit_raw' => $prev_month_profit,
 ]);

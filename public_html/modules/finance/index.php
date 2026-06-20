@@ -70,6 +70,34 @@ $alltime_row = $db->query(
 $month_net   = (float)$month_row['income']   - (float)$month_row['expense'];
 $alltime_net = (float)$alltime_row['income'] - (float)$alltime_row['expense'];
 
+// Previous month summary
+$prev_month_row = $db->query(
+    "SELECT
+       COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END), 0) AS income,
+       COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) AS expense
+     FROM finance_transactions
+     WHERE MONTH(transaction_date) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+       AND YEAR(transaction_date)  = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))"
+)->fetch();
+$prev_month_net = (float)$prev_month_row['income'] - (float)$prev_month_row['expense'];
+
+// Category breakdowns for charts (current month)
+$expense_cats_raw = $db->query(
+    "SELECT category, COALESCE(SUM(amount),0) AS total
+     FROM finance_transactions
+     WHERE type='expense'
+       AND MONTH(transaction_date)=MONTH(CURDATE()) AND YEAR(transaction_date)=YEAR(CURDATE())
+     GROUP BY category ORDER BY total DESC LIMIT 8"
+)->fetchAll();
+
+$income_cats_raw = $db->query(
+    "SELECT category, COALESCE(SUM(amount),0) AS total
+     FROM finance_transactions
+     WHERE type='income'
+       AND MONTH(transaction_date)=MONTH(CURDATE()) AND YEAR(transaction_date)=YEAR(CURDATE())
+     GROUP BY category ORDER BY total DESC LIMIT 8"
+)->fetchAll();
+
 // Count
 $count_stmt = $db->prepare("SELECT COUNT(*) FROM finance_transactions ft WHERE {$where_sql}");
 $count_stmt->execute($params);
@@ -134,6 +162,69 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         </div>
     </div>
 </div>
+
+<!-- Previous Month Comparison -->
+<?php
+$prev_label = date('M Y', strtotime('first day of last month'));
+$inc_diff   = (float)$month_row['income']   - (float)$prev_month_row['income'];
+$exp_diff   = (float)$month_row['expense']  - (float)$prev_month_row['expense'];
+$net_diff   = $month_net - $prev_month_net;
+function _mom_arrow(float $diff, bool $inverse = false): string {
+    if ($diff == 0) return '<span style="color:#6B7280">— No change</span>';
+    $up   = $diff > 0;
+    $good = $inverse ? !$up : $up;
+    $pct  = ($diff > 0 ? '+' : '') . number_format($diff, 0);
+    $color = $good ? 'var(--success)' : 'var(--danger)';
+    $arrow = $up ? '▲' : '▼';
+    return "<span style=\"color:{$color}\">{$arrow} ৳ {$pct}</span>";
+}
+?>
+<div style="margin-bottom:1.25rem">
+    <div style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:.6rem">
+        vs <?= $prev_label ?>
+    </div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(175px,1fr))">
+        <div class="kpi-card" style="--kpi-color:#16A34A;--kpi-soft:#F0FDF4;opacity:.85">
+            <div class="kpi-label">Prev Month Income</div>
+            <div class="kpi-value" style="font-size:1.2rem"><?= e(formatCurrency((float)$prev_month_row['income'])) ?></div>
+            <div style="font-size:.78rem;margin-top:.25rem"><?= _mom_arrow($inc_diff) ?></div>
+        </div>
+        <div class="kpi-card" style="--kpi-color:#DC2626;--kpi-soft:#FEF2F2;opacity:.85">
+            <div class="kpi-label">Prev Month Expense</div>
+            <div class="kpi-value" style="font-size:1.2rem"><?= e(formatCurrency((float)$prev_month_row['expense'])) ?></div>
+            <div style="font-size:.78rem;margin-top:.25rem"><?= _mom_arrow($exp_diff, true) ?></div>
+        </div>
+        <div class="kpi-card" style="--kpi-color:<?= $prev_month_net >= 0 ? '#16A34A' : '#DC2626' ?>;--kpi-soft:<?= $prev_month_net >= 0 ? '#F0FDF4' : '#FEF2F2' ?>;opacity:.85">
+            <div class="kpi-label">Prev Month Net</div>
+            <div class="kpi-value" style="font-size:1.2rem;color:<?= $prev_month_net >= 0 ? 'var(--success)' : 'var(--danger)' ?>">
+                <?= ($prev_month_net >= 0 ? '+' : '') . e(formatCurrency(abs($prev_month_net))) ?>
+            </div>
+            <div style="font-size:.78rem;margin-top:.25rem"><?= _mom_arrow($net_diff) ?></div>
+        </div>
+    </div>
+</div>
+
+<!-- Category Breakdown Charts -->
+<?php if (!empty($expense_cats_raw) || !empty($income_cats_raw)): ?>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem">
+    <?php if (!empty($expense_cats_raw)): ?>
+    <div class="card">
+        <div class="card-header"><span class="card-title">Expense Categories (This Month)</span></div>
+        <div style="position:relative;height:220px;padding:.75rem">
+            <canvas id="expenseCatChart"></canvas>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($income_cats_raw)): ?>
+    <div class="card">
+        <div class="card-header"><span class="card-title">Income Sources (This Month)</span></div>
+        <div style="position:relative;height:220px;padding:.75rem">
+            <canvas id="incomeCatChart"></canvas>
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <!-- Filters -->
 <form method="GET" action="/modules/finance/index.php"
@@ -267,4 +358,48 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 </div>
 <?php endif; ?>
 
-<?php require_once dirname(__DIR__, 2) . '/includes/layout_footer.php'; ?>
+<?php
+$extra_js = ['https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'];
+
+$exp_labels = json_encode(array_column($expense_cats_raw, 'category'));
+$exp_data   = json_encode(array_map(fn($r) => (float)$r['total'], $expense_cats_raw));
+$inc_labels = json_encode(array_column($income_cats_raw, 'category'));
+$inc_data   = json_encode(array_map(fn($r) => (float)$r['total'], $income_cats_raw));
+
+$inline_js = <<<JS
+(function() {
+    var PIE_COLORS = ['#2563EB','#16A34A','#DC2626','#D97706','#7C3AED','#0891B2','#DB2777','#9CA3AF'];
+    function makePie(id, labels, data) {
+        var ctx = document.getElementById(id);
+        if (!ctx || !labels.length) return;
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{ data: data, backgroundColor: PIE_COLORS, borderWidth: 2, borderColor: '#fff', hoverOffset: 4 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '55%',
+                plugins: {
+                    legend: { position: 'right', labels: { padding: 12, font: { size: 11 }, boxWidth: 12 } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+                                var pct = total > 0 ? Math.round(ctx.parsed / total * 100) : 0;
+                                return ' ৳ ' + ctx.parsed.toLocaleString() + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    makePie('expenseCatChart', {$exp_labels}, {$exp_data});
+    makePie('incomeCatChart',  {$inc_labels}, {$inc_data});
+})();
+JS;
+
+require_once dirname(__DIR__, 2) . '/includes/layout_footer.php'; ?>
