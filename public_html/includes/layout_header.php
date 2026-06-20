@@ -8,11 +8,15 @@
  *   array  $extra_css    — (optional) additional stylesheet URLs
  */
 
+require_once __DIR__ . '/farm_guard.php';
+
 $_layout_user        = currentUser();
 $_layout_initials    = strtoupper(substr($_layout_user['name'], 0, 1));
 $_layout_role        = $_layout_user['role'];
 $_layout_alert_count = getUnreadAlertCount();
 $_layout_flash       = getFlashMessage();
+$_layout_farm        = currentFarm();
+$_layout_farm_name   = $_layout_farm['farm_name'] ?? APP_NAME;
 
 $_nav_active = function (string $key) use ($active_nav): string {
     return (($active_nav ?? '') === $key) ? ' active' : '';
@@ -45,7 +49,12 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
     <aside class="sidebar" id="sidebar">
         <a href="/dashboard.php" class="sidebar-brand">
             <div class="sidebar-brand-icon">🐄</div>
-            <span class="sidebar-brand-text">Cow Mgmt<br>System</span>
+            <span class="sidebar-brand-text">
+                <?= e($_layout_farm_name) ?>
+                <?php if ($_layout_farm): ?>
+                <br><span style="font-size:.62rem;font-weight:500;opacity:.7;letter-spacing:.02em"><?= e($_layout_farm['farm_code'] ?? '') ?></span>
+                <?php endif; ?>
+            </span>
         </a>
 
         <nav class="sidebar-nav">
@@ -168,6 +177,15 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 <span class="nav-badge"><?= $_layout_alert_count > 99 ? '99+' : $_layout_alert_count ?></span>
                 <?php endif; ?>
             </a>
+
+            <!-- Super Admin -->
+            <?php if ($_layout_role === 'superadmin'): ?>
+            <span class="nav-section-label">Super Admin</span>
+            <a href="/modules/super_admin/index.php" class="nav-item<?= $_nav_active('super_admin') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                All Farms
+            </a>
+            <?php endif; ?>
 
             <!-- Admin only -->
             <?php if ($_can(['admin'])): ?>

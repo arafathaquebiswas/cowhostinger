@@ -1,6 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
-requireAuth();
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
+requireFarmScope();
 requireModule('cows');
 
 $page_title = 'Cow Management';
@@ -20,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete' && hasRole(['admin'])) {
         $del_id = (int)($_POST['cow_id'] ?? 0);
         if ($del_id > 0) {
-            $sel = $db->prepare("SELECT id, tag_number, status FROM cows WHERE id = ?");
+            $sel = $db->prepare("SELECT id, tag_number, status FROM cows WHERE id = ? AND " . farmFilter());
             $sel->execute([$del_id]);
             $del_cow = $sel->fetch();
             if ($del_cow) {
@@ -73,7 +74,7 @@ if (!in_array($status, $valid_statuses, true)) {
 }
 
 // Build WHERE clause; exclude archived cows from default view
-$where  = ['1=1'];
+$where  = [farmFilter()];   // ← multi-tenant: scoped to current farm
 $params = [];
 if ($search !== '') {
     $where[]  = '(tag_number LIKE ? OR breed LIKE ?)';
@@ -108,12 +109,16 @@ $stmt->execute($fetch_params);
 $cows = $stmt->fetchAll();
 
 // Status counts for quick-filter pills
-$sc_rows    = $db->query("SELECT status, COUNT(*) AS cnt FROM cows GROUP BY status")->fetchAll();
+$sc_stmt = $db->prepare("SELECT status, COUNT(*) AS cnt FROM cows WHERE " . farmFilter() . " GROUP BY status");
+$sc_stmt->execute();
+$sc_rows       = $sc_stmt->fetchAll();
 $status_counts = [];
 foreach ($sc_rows as $r) {
     $status_counts[$r['status']] = (int)$r['cnt'];
 }
-$total_all = (int)$db->query("SELECT COUNT(*) FROM cows WHERE status != 'archived'")->fetchColumn();
+$ta_stmt = $db->prepare("SELECT COUNT(*) FROM cows WHERE " . farmFilter() . " AND status != 'archived'");
+$ta_stmt->execute();
+$total_all = (int)$ta_stmt->fetchColumn();
 
 // Helpers
 function cow_status_badge(string $s): string {

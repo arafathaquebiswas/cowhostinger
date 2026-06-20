@@ -1,103 +1,63 @@
 <?php
 require_once dirname(__DIR__) . '/includes/role_guard.php';
+require_once dirname(__DIR__) . '/includes/farm_guard.php';
 startSecureSession();
 requireAuth();
 
-$db = getDB();
+$db  = getDB();
+$ff  = farmFilter();   // e.g. "farm_id = 1" or "1=1" for superadmin
 
 // 1. Total active cows
-$total_cows = (int)$db->query(
-    "SELECT COUNT(*) FROM cows WHERE status NOT IN ('sold','deceased')"
-)->fetchColumn();
+$s = $db->prepare("SELECT COUNT(*) FROM cows WHERE {$ff} AND status NOT IN ('sold','deceased')");
+$s->execute();
+$total_cows = (int)$s->fetchColumn();
 
-// 2. Healthy cows
-$healthy_cows = (int)$db->query(
-    "SELECT COUNT(*) FROM cows WHERE status IN ('active','lactating','dry')"
-)->fetchColumn();
+// Helper: prepare + execute, return fetchColumn value
+function _kpi(PDO $db, string $sql, array $p = []): string|int|float|false {
+    $st = $db->prepare($sql); $st->execute($p); return $st->fetchColumn();
+}
 
-// 3. Sick cows
-$sick_cows = (int)$db->query(
-    "SELECT COUNT(*) FROM cows WHERE status IN ('sick','quarantine')"
-)->fetchColumn();
+// 2–4. Cow health counts
+$healthy_cows  = (int)_kpi($db, "SELECT COUNT(*) FROM cows WHERE {$ff} AND status IN ('active','lactating','dry')");
+$sick_cows     = (int)_kpi($db, "SELECT COUNT(*) FROM cows WHERE {$ff} AND status IN ('sick','quarantine')");
+$pregnant_cows = (int)_kpi($db, "SELECT COUNT(*) FROM cows WHERE {$ff} AND (status='pregnant' OR is_pregnant=1)");
 
-// 4. Pregnant cows
-$pregnant_cows = (int)$db->query(
-    "SELECT COUNT(*) FROM cows WHERE status = 'pregnant' OR is_pregnant = 1"
-)->fetchColumn();
+// 5. Today's milk
+$milk_today = (float)_kpi($db, "SELECT COALESCE(SUM(liters),0) FROM milk_records WHERE {$ff} AND DATE(recorded_at)=CURDATE()");
 
-// 5. Today's milk (liters)
-$milk_today = (float)$db->query(
-    "SELECT COALESCE(SUM(liters),0) FROM milk_records WHERE DATE(recorded_at) = CURDATE()"
-)->fetchColumn();
+// 6. Monthly milk revenue
+$price_row       = $db->prepare("SELECT price_per_liter FROM milk_price_history WHERE {$ff} ORDER BY effective_date DESC LIMIT 1");
+$price_row->execute();
+$price_per_liter = ($r = $price_row->fetch()) ? (float)$r['price_per_liter'] : 0;
+$monthly_liters  = (float)_kpi($db, "SELECT COALESCE(SUM(liters),0) FROM milk_records WHERE {$ff} AND MONTH(recorded_at)=MONTH(CURDATE()) AND YEAR(recorded_at)=YEAR(CURDATE())");
+$milk_revenue    = $monthly_liters * $price_per_liter;
 
-// 6. Monthly milk revenue (latest price × monthly litres)
-$price_row = $db->query(
-    "SELECT price_per_liter FROM milk_price_history ORDER BY effective_date DESC LIMIT 1"
-)->fetch();
-$price_per_liter = $price_row ? (float)$price_row['price_per_liter'] : 0;
+// 7. Feed alerts
+$feed_alerts = (int)_kpi($db, "SELECT COUNT(*) FROM feed_inventory WHERE {$ff} AND reorder_threshold>0 AND quantity<=reorder_threshold");
 
-$monthly_liters = (float)$db->query(
-    "SELECT COALESCE(SUM(liters),0) FROM milk_records
-     WHERE MONTH(recorded_at) = MONTH(CURDATE()) AND YEAR(recorded_at) = YEAR(CURDATE())"
-)->fetchColumn();
-$milk_revenue = $monthly_liters * $price_per_liter;
-
-// 7. Feed stock alerts (quantity at or below reorder threshold)
-$feed_alerts = (int)$db->query(
-    "SELECT COUNT(*) FROM feed_inventory
-     WHERE reorder_threshold > 0 AND quantity <= reorder_threshold"
-)->fetchColumn();
-
-// 8. Medicine alerts (low stock OR expiring within 30 days)
-$med_alerts = (int)$db->query(
-    "SELECT COUNT(*) FROM medicine_inventory
-     WHERE (reorder_threshold > 0 AND quantity <= reorder_threshold)
-        OR (expiry_date IS NOT NULL AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY))"
-)->fetchColumn();
+// 8. Medicine alerts
+$med_alerts = (int)_kpi($db, "SELECT COUNT(*) FROM medicine_inventory WHERE {$ff} AND ((reorder_threshold>0 AND quantity<=reorder_threshold) OR (expiry_date IS NOT NULL AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)))");
 
 // 9. Equipment under maintenance
-$equip_maint = (int)$db->query(
-    "SELECT COUNT(*) FROM equipment WHERE status = 'maintenance'"
-)->fetchColumn();
+$equip_maint = (int)_kpi($db, "SELECT COUNT(*) FROM equipment WHERE {$ff} AND status='maintenance'");
 
 // 10. Net profit this month
-$net_profit = (float)$db->query(
-    "SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END), 0)
-     FROM finance_transactions
-     WHERE MONTH(transaction_date) = MONTH(CURDATE())
-       AND YEAR(transaction_date)  = YEAR(CURDATE())"
-)->fetchColumn();
+$net_profit = (float)_kpi($db, "SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END),0) FROM finance_transactions WHERE {$ff} AND MONTH(transaction_date)=MONTH(CURDATE()) AND YEAR(transaction_date)=YEAR(CURDATE())");
 
-// 11. Damaged equipment count
-$damaged_equipment = (int)$db->query(
-    "SELECT COUNT(*) FROM equipment WHERE status = 'damaged'"
-)->fetchColumn();
+// 11. Damaged equipment
+$damaged_equipment = (int)_kpi($db, "SELECT COUNT(*) FROM equipment WHERE {$ff} AND status='damaged'");
 
-// 12. Feed cost this month (from finance_transactions)
-$feed_cost_month = (float)$db->query(
-    "SELECT COALESCE(SUM(amount), 0) FROM finance_transactions
-     WHERE category = 'Feed Purchase'
-       AND MONTH(transaction_date) = MONTH(CURDATE())
-       AND YEAR(transaction_date)  = YEAR(CURDATE())"
-)->fetchColumn();
+// 12. Feed cost this month
+$feed_cost_month = (float)_kpi($db, "SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE {$ff} AND category='Feed Purchase' AND MONTH(transaction_date)=MONTH(CURDATE()) AND YEAR(transaction_date)=YEAR(CURDATE())");
 
-// 13. Equipment sales this month revenue
+// 13. Equipment sales this month
 $equip_sales_month = 0.0;
 try {
-    $equip_sales_month = (float)$db->query(
-        "SELECT COALESCE(SUM(sale_price), 0) FROM equipment_sales
-         WHERE MONTH(sale_date) = MONTH(CURDATE())
-           AND YEAR(sale_date)  = YEAR(CURDATE())"
-    )->fetchColumn();
-} catch (PDOException $e) { /* table may not exist on older installs */ }
+    $equip_sales_month = (float)_kpi($db, "SELECT COALESCE(SUM(sale_price),0) FROM equipment_sales WHERE {$ff} AND MONTH(sale_date)=MONTH(CURDATE()) AND YEAR(sale_date)=YEAR(CURDATE())");
+} catch (PDOException $e) {}
 
 // 14. Previous month net profit
-$prev_month_profit = (float)$db->query(
-    "SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END), 0)
-     FROM finance_transactions
-     WHERE MONTH(transaction_date) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
-       AND YEAR(transaction_date)  = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))"
-)->fetchColumn();
+$prev_month_profit = (float)_kpi($db, "SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END),0) FROM finance_transactions WHERE {$ff} AND MONTH(transaction_date)=MONTH(DATE_SUB(CURDATE(),INTERVAL 1 MONTH)) AND YEAR(transaction_date)=YEAR(DATE_SUB(CURDATE(),INTERVAL 1 MONTH))");
 
 jsonResponse([
     'total_cows'         => $total_cows,

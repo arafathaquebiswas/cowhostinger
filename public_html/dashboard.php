@@ -6,22 +6,35 @@ requireAuth();
 if (hasRole(['user'])) {
     redirect('/user_dashboard.php');
 }
+if (hasRole(['superadmin'])) {
+    redirect('/modules/super_admin/index.php');
+}
 
 $page_title = 'Dashboard';
 $active_nav = 'dashboard';
 
 require_once __DIR__ . '/includes/layout_header.php';
 
-$user        = currentUser();
-$first_name  = explode(' ', $user['name'])[0];
-$is_admin    = $user['role'] === 'admin';
+$user          = currentUser();
+$first_name    = explode(' ', $user['name'])[0];
+$is_admin      = $user['role'] === 'admin';
 $is_accountant = in_array($user['role'], ['admin', 'accountant'], true);
+$farm          = currentFarm();
+$farm_name     = $farm['farm_name'] ?? APP_NAME;
+$farm_code     = $farm['farm_code'] ?? null;
+$plan_name     = $farm['plan_name'] ?? 'Free';
 ?>
 
 <div class="page-header">
     <div>
-        <h2>Welcome back, <?= e($first_name) ?></h2>
-        <p class="text-muted text-sm"><?= date('l, d F Y') ?></p>
+        <h2>Welcome to <?= e($farm_name) ?></h2>
+        <p class="text-muted text-sm">
+            <?= date('l, d F Y') ?>
+            <?php if ($farm_code): ?>
+            &nbsp;·&nbsp; <span style="font-family:monospace;font-weight:600;color:var(--primary)"><?= e($farm_code) ?></span>
+            <?php endif; ?>
+            &nbsp;<?= farmPlanBadge() ?>
+        </p>
     </div>
     <?php if ($is_admin): ?>
     <div class="d-flex gap-1">

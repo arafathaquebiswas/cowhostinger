@@ -1,5 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
+requireFarmScope();
 requireRole(['admin', 'veterinarian']);
 requireModule('cows');
 
@@ -31,7 +33,7 @@ $cow = [
 
 $existing = null;
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM cows WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM cows WHERE id = ? AND " . farmFilter());
     $sel->execute([$cow_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -90,9 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Birth date cannot be in the future.';
     }
 
-    // Tag number uniqueness check
+    // Tag number uniqueness — scoped to this farm
     if (empty($errors) && $cow['tag_number'] !== '') {
-        $chk = $db->prepare("SELECT id FROM cows WHERE tag_number = ? AND id != ?");
+        $chk = $db->prepare("SELECT id FROM cows WHERE tag_number = ? AND id != ? AND " . farmFilter());
         $chk->execute([$cow['tag_number'], $cow_id]);
         if ($chk->fetch()) {
             $errors[] = "Tag number '{$cow['tag_number']}' is already assigned to another cow.";
@@ -146,13 +148,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', "Cow #{$tag} updated successfully.");
             redirect("/modules/cows/view.php?id={$cow_id}");
         } else {
+            // Subscription limit check
+            if (!farmCanAddCow()) {
+                $limit = farmCowLimit();
+                flashMessage('error', "Your plan allows a maximum of {$limit} active cows. Please upgrade to add more.");
+                redirect('/modules/cows/index.php');
+            }
             $ins = $db->prepare(
                 "INSERT INTO cows
-                     (tag_number, breed, birth_date, purchase_price, purchase_date,
+                     (farm_id, tag_number, breed, birth_date, purchase_price, purchase_date,
                       current_weight, health_status, is_pregnant, status, photo_url, notes)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
             );
-            $ins->execute([$tag, $breed, $bdate, $price, $pdate, $weight, $health, $preg, $status, $photo_url, $notes]);
+            $ins->execute([fid(), $tag, $breed, $bdate, $price, $pdate, $weight, $health, $preg, $status, $photo_url, $notes]);
             $new_id = (int)$db->lastInsertId();
 
             if ($weight !== null) {
