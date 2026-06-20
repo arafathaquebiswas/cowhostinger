@@ -1,7 +1,6 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 requireRole(['admin']);
-requireModule('cows'); // ensures module system is working
 
 $page_title = 'Module Settings';
 $active_nav = 'admin_settings';
@@ -18,6 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $modules = $_POST['modules'] ?? [];
     if (!is_array($modules)) $modules = [];
+
+    // Server-side safety: alerts must always remain enabled
+    if (!in_array('alerts', $modules, true)) {
+        $modules[] = 'alerts';
+    }
 
     // Get all module names
     $all_modules = $db->query("SELECT module_name FROM module_settings ORDER BY module_name")->fetchAll(PDO::FETCH_COLUMN);
