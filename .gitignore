@@ -1,0 +1,4 @@
+.DS_Store
+.claude/settings.local.json
+public_html/uploads/*
+!public_html/uploads/.htaccess

@@ -1,0 +1,59 @@
+# ============================================================
+# Cow Management System — Root .htaccess
+# ============================================================
+
+Options -Indexes
+ServerSignature Off
+
+# Security headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options   "nosniff"
+    Header always set X-Frame-Options          "SAMEORIGIN"
+    Header always set X-XSS-Protection         "1; mode=block"
+    Header always set Referrer-Policy          "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy       "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+# Block direct access to includes/
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^includes/ - [F,L]
+</IfModule>
+
+# Protect sensitive files
+<FilesMatch "\.(sql|env|log|md|git|htpasswd|json|lock|ini|bak)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# PHP settings
+<IfModule mod_php.c>
+    php_flag display_errors     Off
+    php_flag log_errors         On
+    php_value session.use_strict_mode 1
+    php_value session.cookie_httponly 1
+    php_value session.cookie_samesite Strict
+</IfModule>
+
+<IfModule mod_php8.c>
+    php_flag display_errors     Off
+    php_flag log_errors         On
+    php_value session.use_strict_mode 1
+    php_value session.cookie_httponly 1
+    php_value session.cookie_samesite Strict
+</IfModule>
+
+# Enable gzip compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript
+</IfModule>
+
+# Cache static assets
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css                  "access plus 1 month"
+    ExpiresByType application/javascript    "access plus 1 month"
+    ExpiresByType image/jpeg                "access plus 1 year"
+    ExpiresByType image/png                 "access plus 1 year"
+    ExpiresByType image/webp                "access plus 1 year"
+</IfModule>
