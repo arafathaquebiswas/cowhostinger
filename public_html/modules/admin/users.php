@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$name, $email, $hash, $role, $status]);
                 $new_id = (int)$db->lastInsertId();
                 auditLog((int)$_SESSION['user_id'], 'CREATE_USER', 'users', $new_id, null, ['name'=>$name,'email'=>$email,'role'=>$role]);
-                flashMessage('success', "User "{$name}" created successfully.");
+                flashMessage('success', "User \"{$name}\" created successfully.");
                 redirect('/modules/admin/users.php');
             } else {
                 // Edit
@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute([$name, $email, $role, $status, $user_id]);
                 }
                 auditLog((int)$_SESSION['user_id'], 'UPDATE_USER', 'users', $user_id);
-                flashMessage('success', "User "{$name}" updated successfully.");
+                flashMessage('success', "User \"{$name}\" updated successfully.");
                 redirect('/modules/admin/users.php');
             }
         }
