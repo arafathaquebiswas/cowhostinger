@@ -93,6 +93,7 @@ function getRoleRedirect(string $role): string {
         'accountant'   => '/modules/finance/index.php',
         'veterinarian' => '/modules/cows/index.php',
         'reception'    => '/modules/cows/index.php',
+        'user'         => '/user_dashboard.php',
         default        => '/index.php',
     };
 }

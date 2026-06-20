@@ -137,6 +137,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         </div>
 
+        <p style="text-align:center;margin-top:1.25rem;font-size:.85rem;color:rgba(255,255,255,.65)">
+            New here?
+            <a href="/register.php" style="color:rgba(255,255,255,.9);font-weight:600">Create an account</a>
+            &nbsp;·&nbsp;
+            <a href="/home.php" style="color:rgba(255,255,255,.65)">Learn more</a>
+        </p>
+
         <p class="auth-footer">
             &copy; <?= date('Y') ?> <?= e(APP_NAME) ?>. All rights reserved.
         </p>

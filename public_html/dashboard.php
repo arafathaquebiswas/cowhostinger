@@ -2,6 +2,11 @@
 require_once __DIR__ . '/includes/role_guard.php';
 requireAuth();
 
+// Public users have their own dashboard
+if (hasRole(['user'])) {
+    redirect('/user_dashboard.php');
+}
+
 $page_title = 'Dashboard';
 $active_nav = 'dashboard';
 
