@@ -257,6 +257,10 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <td style="font-size:.82rem"><?= $t['completed_at'] ? e(formatDate($t['completed_at'])) : '—' ?></td>
                 <td>
                     <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+                        <a href="/modules/workers/edit_task.php?id=<?= $t['id'] ?>&back=<?= urlencode('/modules/workers/tasks.php?' . http_build_query(array_filter(['worker_id'=>$filter_worker?:null,'status'=>$filter_status]))) ?>"
+                           class="btn btn-sm btn-secondary" title="Edit">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </a>
                         <?php if ($t['status'] !== 'completed'): ?>
                         <form method="POST" style="display:inline">
                             <?= csrfField() ?>

@@ -99,8 +99,11 @@ $stats = $db->query(
     "SELECT
        COUNT(*) AS total,
        SUM(w.status = 'active') AS active,
+       SUM(w.status = 'inactive') AS inactive,
+       SUM(CASE WHEN w.status = 'active' THEN w.salary ELSE 0 END) AS monthly_salary,
        (SELECT COUNT(*) FROM worker_tasks WHERE status IN ('pending','in_progress')) AS open_tasks,
-       (SELECT COUNT(*) FROM worker_tasks WHERE status = 'overdue') AS overdue
+       (SELECT COUNT(*) FROM worker_tasks WHERE status = 'overdue') AS overdue,
+       (SELECT COUNT(*) FROM worker_tasks WHERE status = 'completed') AS completed_tasks
      FROM workers w"
 )->fetch();
 
@@ -133,14 +136,30 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 </div>
 
 <!-- Summary KPIs -->
-<div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-bottom:1.25rem">
+<div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(155px,1fr));margin-bottom:1.25rem">
+    <div class="kpi-card" style="--kpi-color:#2563EB;--kpi-soft:#EFF6FF">
+        <div class="kpi-label">Total Workers</div>
+        <div class="kpi-value"><?= (int)$stats['total'] ?></div>
+    </div>
     <div class="kpi-card" style="--kpi-color:#16A34A;--kpi-soft:#F0FDF4">
         <div class="kpi-label">Active Workers</div>
         <div class="kpi-value"><?= (int)$stats['active'] ?></div>
     </div>
-    <div class="kpi-card" style="--kpi-color:#2563EB;--kpi-soft:#EFF6FF">
+    <div class="kpi-card" style="--kpi-color:#D97706;--kpi-soft:#FFFBEB">
+        <div class="kpi-label">Inactive</div>
+        <div class="kpi-value"><?= (int)$stats['inactive'] ?></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:#7C3AED;--kpi-soft:#F5F3FF">
+        <div class="kpi-label">Monthly Salary</div>
+        <div class="kpi-value" style="font-size:1.2rem"><?= formatCurrency((float)$stats['monthly_salary'], '৳') ?></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:#0891B2;--kpi-soft:#ECFEFF">
         <div class="kpi-label">Open Tasks</div>
         <div class="kpi-value"><?= (int)$stats['open_tasks'] ?></div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:#16A34A;--kpi-soft:#F0FDF4">
+        <div class="kpi-label">Completed Tasks</div>
+        <div class="kpi-value"><?= (int)$stats['completed_tasks'] ?></div>
     </div>
     <?php if ($stats['overdue'] > 0): ?>
     <div class="kpi-card" style="--kpi-color:#DC2626;--kpi-soft:#FEF2F2">
@@ -228,6 +247,10 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             </td>
             <td>
                 <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+                    <a href="/modules/workers/view.php?id=<?= $w['worker_id'] ?>"
+                       class="btn btn-sm btn-secondary" title="View details">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </a>
                     <a href="/modules/workers/tasks.php?worker_id=<?= $w['worker_id'] ?>"
                        class="btn btn-sm btn-secondary" title="View tasks">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
