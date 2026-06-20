@@ -80,7 +80,7 @@ $pager = paginate($total, $per_page, $page);
 $fetch_params = array_merge($params, [$per_page, $pager['offset']]);
 $stmt = $db->prepare(
     "SELECT w.id AS worker_id, w.salary, w.hire_date, w.termination_date, w.status AS worker_status,
-            u.id AS user_id, u.name, u.email, u.role, u.is_active,
+            u.id AS user_id, u.name, u.email, u.role, u.status AS user_status,
             (SELECT COUNT(*) FROM worker_tasks wt
              WHERE wt.worker_id = w.id AND wt.status IN ('pending','in_progress')) AS pending_tasks,
             (SELECT COUNT(*) FROM worker_tasks wt

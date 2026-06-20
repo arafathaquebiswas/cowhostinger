@@ -45,7 +45,7 @@ if (!$is_edit) {
     $available_users = $db->query(
         "SELECT u.id, u.name, u.email, u.role
          FROM users u
-         WHERE u.is_active = 1
+         WHERE u.status = 'active'
            AND u.id NOT IN (SELECT user_id FROM workers)
          ORDER BY u.name ASC"
     )->fetchAll();

@@ -9,7 +9,7 @@ if ($worker_id <= 0) { redirect('/modules/workers/index.php'); }
 
 $stmt = $db->prepare(
     "SELECT w.id AS worker_id, w.salary, w.hire_date, w.termination_date, w.status AS worker_status,
-            u.id AS user_id, u.name, u.email, u.role, u.is_active, u.created_at AS user_created
+            u.id AS user_id, u.name, u.email, u.role, u.status AS user_status, u.created_at AS user_created
      FROM workers w
      JOIN users u ON u.id = w.user_id
      WHERE w.id = ?"
@@ -137,7 +137,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         ['Hire Date',   formatDate($worker['hire_date']) ?: '—'],
                         ['Employed',    $emp_days !== null ? number_format($emp_days) . ' days' : '—'],
                         ['Terminated',  $worker['termination_date'] ? formatDate($worker['termination_date']) : '—'],
-                        ['Account',     $worker['is_active'] ? '<span style="color:var(--success)">Active</span>' : '<span style="color:var(--danger)">Disabled</span>'],
+                        ['Account',     $worker['user_status'] === 'active' ? '<span style="color:var(--success)">Active</span>' : '<span style="color:var(--danger)">Disabled</span>'],
                     ];
                     foreach ($rows as [$label, $val]):
                     ?>
