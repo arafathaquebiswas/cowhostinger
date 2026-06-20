@@ -89,7 +89,7 @@ function hasRole(array $roles): bool {
 function getRoleRedirect(string $role): string {
     return match ($role) {
         'admin'        => '/dashboard.php',
-        'worker'       => '/modules/workers/my-tasks.php',
+        'worker'       => '/modules/workers/my_tasks.php',
         'accountant'   => '/modules/finance/index.php',
         'veterinarian' => '/modules/cows/index.php',
         'reception'    => '/modules/cows/index.php',

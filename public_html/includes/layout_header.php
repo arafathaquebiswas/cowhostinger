@@ -21,6 +21,8 @@ $_nav_active = function (string $key) use ($active_nav): string {
 $_can = function (array $roles) use ($_layout_role): bool {
     return in_array($_layout_role, $roles, true);
 };
+
+$_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,19 +59,21 @@ $_can = function (array $roles) use ($_layout_role): bool {
 
             <!-- Farm -->
             <span class="nav-section-label">Farm</span>
+            <?php if ($_module_enabled('cows')): ?>
             <a href="/modules/cows/index.php" class="nav-item<?= $_nav_active('cows') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="14" rx="8" ry="6"/><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/></svg>
                 Cows
             </a>
+            <?php endif; ?>
 
-            <?php if ($_can(['admin', 'worker', 'veterinarian'])): ?>
+            <?php if ($_module_enabled('milk') && $_can(['admin', 'worker', 'veterinarian'])): ?>
             <a href="/modules/milk/index.php" class="nav-item<?= $_nav_active('milk') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8l2 6H6L8 2z"/><path d="M6 8v12a2 2 0 002 2h8a2 2 0 002-2V8"/></svg>
                 Milk
             </a>
             <?php endif; ?>
 
-            <?php if ($_can(['admin', 'veterinarian', 'reception'])): ?>
+            <?php if ($_module_enabled('breeding') && $_can(['admin', 'veterinarian', 'reception'])): ?>
             <a href="/modules/breeding/index.php" class="nav-item<?= $_nav_active('breeding') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
                 Breeding
@@ -78,15 +82,15 @@ $_can = function (array $roles) use ($_layout_role): bool {
 
             <!-- Health -->
             <span class="nav-section-label">Health</span>
-            <?php if ($_can(['admin', 'veterinarian', 'worker'])): ?>
+            <?php if ($_module_enabled('feed_medicine') && $_can(['admin', 'veterinarian', 'worker'])): ?>
             <a href="/modules/feed_medicine/index.php" class="nav-item<?= $_nav_active('feed_medicine') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
                 Feed &amp; Medicine
             </a>
             <?php endif; ?>
 
-            <?php if ($_can(['admin', 'veterinarian'])): ?>
-            <a href="/modules/cows/diagnosis.php" class="nav-item<?= $_nav_active('diagnosis') ?>">
+            <?php if ($_module_enabled('diagnosis') && $_can(['admin', 'veterinarian'])): ?>
+            <a href="/modules/diagnosis/index.php" class="nav-item<?= $_nav_active('diagnosis') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                 Diagnosis
             </a>
@@ -94,39 +98,45 @@ $_can = function (array $roles) use ($_layout_role): bool {
 
             <!-- Operations -->
             <span class="nav-section-label">Operations</span>
-            <?php if ($_can(['admin', 'accountant', 'reception'])): ?>
+            <?php if ($_module_enabled('sales') && $_can(['admin', 'accountant', 'reception'])): ?>
             <a href="/modules/sales/index.php" class="nav-item<?= $_nav_active('sales') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
                 Sales
             </a>
             <?php endif; ?>
 
-            <?php if ($_can(['admin'])): ?>
+            <?php if ($_module_enabled('workers') && $_can(['admin'])): ?>
             <a href="/modules/workers/index.php" class="nav-item<?= $_nav_active('workers') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
                 Workers
             </a>
+            <?php if ($_module_enabled('equipment')): ?>
             <a href="/modules/equipment/index.php" class="nav-item<?= $_nav_active('equipment') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M5.34 18.66l-1.41 1.41M21 12h-2M5 12H3M19.07 19.07l-1.41-1.41M5.34 5.34L3.93 3.93M12 3V1M12 23v-2"/></svg>
                 Equipment
             </a>
+            <?php endif; ?>
+            <?php if ($_module_enabled('maintenance')): ?>
             <a href="/modules/maintenance/index.php" class="nav-item<?= $_nav_active('maintenance') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
                 Maintenance
             </a>
             <?php endif; ?>
+            <?php endif; ?>
 
             <!-- Finance -->
             <span class="nav-section-label">Finance &amp; Reports</span>
-            <?php if ($_can(['admin', 'accountant'])): ?>
+            <?php if ($_module_enabled('finance') && $_can(['admin', 'accountant'])): ?>
             <a href="/modules/finance/index.php" class="nav-item<?= $_nav_active('finance') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 Finance
             </a>
+            <?php if ($_module_enabled('reports')): ?>
             <a href="/reports/index.php" class="nav-item<?= $_nav_active('reports') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                 Reports
             </a>
+            <?php endif; ?>
             <?php endif; ?>
 
             <!-- Alerts -->

@@ -159,12 +159,15 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <?= count($feed_items) ?> feed types &nbsp;·&nbsp; <?= count($medicine_items) ?> medicines
         </p>
     </div>
-    <?php if (hasRole(['admin'])): ?>
     <div style="display:flex;gap:.5rem">
+        <?php if (hasRole(['admin','veterinarian'])): ?>
+        <a href="/modules/feed_medicine/treatment_form.php" class="btn btn-secondary btn-sm">+ Treatment</a>
+        <?php endif; ?>
+        <?php if (hasRole(['admin'])): ?>
         <a href="/modules/feed_medicine/feed_form.php" class="btn btn-secondary btn-sm">+ Add Feed</a>
         <a href="/modules/feed_medicine/medicine_form.php" class="btn btn-primary btn-sm">+ Add Medicine</a>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
 </div>
 
 <!-- KPI bar -->

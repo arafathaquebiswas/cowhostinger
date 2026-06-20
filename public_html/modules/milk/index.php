@@ -112,6 +112,19 @@ $cows_list = $db->query(
      ORDER BY tag_number ASC"
 )->fetchAll();
 
+$top_producers = $db->query(
+    "SELECT c.id, c.tag_number, c.breed,
+            COALESCE(SUM(mr.liters),0) AS total_liters,
+            COUNT(mr.id) AS record_count,
+            ROUND(AVG(mr.liters), 2) AS avg_liters
+     FROM milk_records mr
+     JOIN cows c ON c.id = mr.cow_id
+     WHERE mr.recorded_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+     GROUP BY c.id, c.tag_number, c.breed
+     ORDER BY total_liters DESC
+     LIMIT 5"
+)->fetchAll();
+
 $qs = static fn(array $p): string =>
     '/modules/milk/index.php?' . http_build_query(array_filter($p, static fn($v) => $v !== '' && $v !== null && $v !== 0));
 
@@ -207,6 +220,49 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <?= number_format($total) ?> record<?= $total !== 1 ? 's' : '' ?>
     </span>
 </form>
+
+<div class="card" style="margin-bottom:1.5rem">
+    <div class="card-header">
+        <span class="card-title">Top-Producing Cows - Last 30 Days</span>
+    </div>
+    <?php if (empty($top_producers)): ?>
+    <div class="empty-state" style="padding:1.5rem">
+        <h3>No production ranking yet</h3>
+        <p>Record milk entries to populate the top-producing cows view.</p>
+    </div>
+    <?php else: ?>
+    <div style="overflow-x:auto">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Cow</th>
+                <th>Total Liters</th>
+                <th>Average / Entry</th>
+                <th>Records</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($top_producers as $idx => $cow): ?>
+        <tr>
+            <td>
+                <span class="badge badge-blue" style="margin-right:.45rem">#<?= $idx + 1 ?></span>
+                <a href="/modules/cows/view.php?id=<?= $cow['id'] ?>" style="font-weight:600;color:var(--primary)">
+                    #<?= e($cow['tag_number']) ?>
+                </a>
+                <span class="text-muted" style="font-size:.82rem"><?= e($cow['breed']) ?></span>
+            </td>
+            <td><strong><?= e(number_format((float)$cow['total_liters'], 2)) ?> L</strong></td>
+            <td><?= e(number_format((float)$cow['avg_liters'], 2)) ?> L</td>
+            <td><?= (int)$cow['record_count'] ?></td>
+            <td><a href="/modules/milk/index.php?cow_id=<?= $cow['id'] ?>" class="btn btn-sm btn-secondary">View Records</a></td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    </div>
+    <?php endif; ?>
+</div>
 
 <div class="card" style="margin-bottom:1.5rem">
     <?php if (empty($records)): ?>
