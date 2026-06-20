@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('equipment');
 
 $db     = getDB();
@@ -25,7 +27,7 @@ $form = [
 ];
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM equipment WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM equipment WHERE id = ? AND " . farmFilter());
     $sel->execute([$eq_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -112,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare(
                 "UPDATE equipment SET name=?, category=?, purchase_date=?, purchase_price=?,
                  acquisition_type=?, gifted_by=?, current_value=?, status=?, lifespan_months=?,
-                 last_maintenance_date=?, photo_url=?, notes=? WHERE id=?"
+                 last_maintenance_date=?, photo_url=?, notes=? WHERE id=? AND " . farmFilter()
             )->execute([
                 $form['name'], $cat_val, $pdate, $purchase_price_val,
                 $form['acquisition_type'], $gifted_val, $current_value_val,
@@ -122,10 +124,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', "Equipment '{$form['name']}' updated.");
         } else {
             $db->prepare(
-                "INSERT INTO equipment (name, category, purchase_date, purchase_price, acquisition_type, gifted_by, current_value, status, lifespan_months, last_maintenance_date, photo_url, notes)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+                "INSERT INTO equipment (farm_id, name, category, purchase_date, purchase_price, acquisition_type, gifted_by, current_value, status, lifespan_months, last_maintenance_date, photo_url, notes)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
             )->execute([
-                $form['name'], $cat_val, $pdate, $purchase_price_val,
+                fid(), $form['name'], $cat_val, $pdate, $purchase_price_val,
                 $form['acquisition_type'], $gifted_val, $current_value_val,
                 $form['status'], $lifespan, $lmdate, $photo_url, $notes_val,
             ]);

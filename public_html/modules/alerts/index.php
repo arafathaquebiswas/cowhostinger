@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 
 $page_title = 'Alerts';
 $active_nav = 'alerts';
@@ -19,20 +21,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'mark_read' && !empty($_POST['alert_id'])) {
         $id = (int)$_POST['alert_id'];
-        $db->prepare("UPDATE alerts SET is_read = 1 WHERE id = ?")->execute([$id]);
+        $db->prepare("UPDATE alerts SET is_read = 1 WHERE id = ? AND " . farmFilter())->execute([$id]);
         auditLog((int)$_SESSION['user_id'], 'MARK_ALERT_READ', 'alerts', $id);
         flashMessage('success', 'Alert marked as read.');
     } elseif ($action === 'mark_all_read') {
-        $db->exec("UPDATE alerts SET is_read = 1 WHERE is_read = 0");
+        $db->prepare("UPDATE alerts SET is_read = 1 WHERE is_read = 0 AND " . farmFilter())->execute();
         auditLog((int)$_SESSION['user_id'], 'MARK_ALL_ALERTS_READ', 'alerts');
         flashMessage('success', 'All alerts marked as read.');
     } elseif ($action === 'delete' && !empty($_POST['alert_id']) && hasRole(['admin'])) {
         $id = (int)$_POST['alert_id'];
-        $db->prepare("DELETE FROM alerts WHERE id = ?")->execute([$id]);
+        $db->prepare("DELETE FROM alerts WHERE id = ? AND " . farmFilter())->execute([$id]);
         auditLog((int)$_SESSION['user_id'], 'DELETE_ALERT', 'alerts', $id);
         flashMessage('success', 'Alert deleted.');
     } elseif ($action === 'delete_all_read' && hasRole(['admin'])) {
-        $db->exec("DELETE FROM alerts WHERE is_read = 1");
+        $db->prepare("DELETE FROM alerts WHERE is_read = 1 AND " . farmFilter())->execute();
         auditLog((int)$_SESSION['user_id'], 'DELETE_READ_ALERTS', 'alerts');
         flashMessage('success', 'All read alerts deleted.');
     }
@@ -50,7 +52,7 @@ $page     = max(1, (int)($_GET['page'] ?? 1));
 $per_page = 25;
 
 // Build WHERE
-$where  = ['1=1'];
+$where  = [farmFilter()];
 $params = [];
 if ($filter === 'unread') { $where[] = 'is_read = 0'; }
 if ($filter === 'read')   { $where[] = 'is_read = 1'; }
@@ -76,7 +78,9 @@ $stmt = $db->prepare(
 $stmt->execute($fetch_params);
 $alerts = $stmt->fetchAll();
 
-$unread_count = (int)$db->query("SELECT COUNT(*) FROM alerts WHERE is_read = 0")->fetchColumn();
+$unread_stmt = $db->prepare("SELECT COUNT(*) FROM alerts WHERE is_read = 0 AND " . farmFilter());
+$unread_stmt->execute();
+$unread_count = (int)$unread_stmt->fetchColumn();
 
 $severity_labels = [
     'critical' => ['label' => 'Critical', 'badge' => 'badge-red'],

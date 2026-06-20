@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <!-- Email tab -->
         <div class="tab-panel <?= $tab==='email'?'active':'' ?>" id="panel-email">
-            <form method="POST" action="/index.php" novalidate autocomplete="on">
+            <form method="POST" action="/index.php" novalidate autocomplete="on" id="loginForm">
                 <?= csrfField() ?>
                 <input type="hidden" name="tab" value="email">
                 <div class="form-group">
@@ -132,19 +132,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="email" id="email" name="email" class="form-control"
                            value="<?= e($tab==='email'?$email:'') ?>"
                            placeholder="you@farm.com" required autocomplete="email" autofocus>
+                    <span class="form-error" id="emailError" role="alert"></span>
                 </div>
                 <div class="form-group">
                     <label for="password" class="form-label">Password</label>
                     <div class="input-group">
                         <input type="password" id="password" name="password" class="form-control"
                                placeholder="••••••••" required autocomplete="current-password">
-                        <button type="button" class="input-group-btn" id="togglePwd" aria-label="Toggle password">
+                        <button type="button" class="input-group-btn" id="togglePwd" aria-label="Toggle password visibility">
                             <svg id="eyeShow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                             <svg id="eyeHide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                         </button>
                     </div>
+                    <span class="form-error" id="passwordError" role="alert"></span>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+                <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+                    <span class="btn-text">Sign In</span>
+                    <span class="btn-spinner" aria-hidden="true" style="display:none">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        </svg>
+                        Signing in…
+                    </span>
+                </button>
             </form>
         </div>
 

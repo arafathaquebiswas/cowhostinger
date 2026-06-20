@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('diagnosis');
 
 $page_title = 'Diagnosis';
@@ -23,11 +25,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_diagnosis') {
         $diag_id = (int)($_POST['diag_id'] ?? 0);
         if ($diag_id > 0) {
-            $sel = $db->prepare("SELECT * FROM diagnosis_records WHERE id = ?");
+            $sel = $db->prepare("SELECT * FROM diagnosis_records WHERE id = ? AND " . farmFilter());
             $sel->execute([$diag_id]);
             $diag = $sel->fetch();
             if ($diag) {
-                $db->prepare("DELETE FROM diagnosis_records WHERE id = ?")->execute([$diag_id]);
+                $db->prepare("DELETE FROM diagnosis_records WHERE id = ? AND " . farmFilter())->execute([$diag_id]);
                 auditLog($user_id, 'DELETE_DIAGNOSIS', 'diagnosis_records', $diag_id, $diag, null);
                 flashMessage('success', 'Diagnosis record deleted.');
             }
@@ -63,7 +65,7 @@ $filter_conf   = in_array($_GET['confidence'] ?? '', ['low','medium','high'], tr
 $page_d        = max(1, (int)($_GET['page_d'] ?? 1));
 $per_page      = 20;
 
-$dw  = ['1=1']; $dp = [];
+$dw  = [farmFilter('dr')]; $dp = [];
 if ($filter_cow_d > 0) { $dw[] = 'dr.cow_id = ?'; $dp[] = $filter_cow_d; }
 if ($filter_conf  !== '') { $dw[] = 'dr.confidence_level = ?'; $dp[] = $filter_conf; }
 $dw_sql = implode(' AND ', $dw);
@@ -92,12 +94,12 @@ $filter_cow_s = (int)($_GET['cow_id_s'] ?? 0);
 $filter_sev   = in_array($_GET['severity'] ?? '', ['mild','moderate','severe'], true) ? $_GET['severity'] : '';
 $page_s       = max(1, (int)($_GET['page_s'] ?? 1));
 
-$sw  = ['1=1']; $sp = [];
+$sw  = [farmFilter('c')]; $sp = [];
 if ($filter_cow_s > 0) { $sw[] = 'cs.cow_id = ?'; $sp[] = $filter_cow_s; }
 if ($filter_sev  !== '') { $sw[] = 'cs.severity = ?'; $sp[] = $filter_sev; }
 $sw_sql = implode(' AND ', $sw);
 
-$s_count = $db->prepare("SELECT COUNT(*) FROM cow_symptoms cs WHERE {$sw_sql}");
+$s_count = $db->prepare("SELECT COUNT(*) FROM cow_symptoms cs JOIN cows c ON c.id = cs.cow_id WHERE {$sw_sql}");
 $s_count->execute($sp);
 $s_total = (int)$s_count->fetchColumn();
 $pager_s = paginate($s_total, $per_page, $page_s);
@@ -118,7 +120,9 @@ $s_stmt->execute(array_merge($sp, [$per_page, $pager_s['offset']]));
 $symptoms = $s_stmt->fetchAll();
 
 // Cow list for filter dropdowns
-$cow_list = $db->query("SELECT id, tag_number, breed FROM cows ORDER BY tag_number ASC")->fetchAll();
+$cow_list = $db->prepare("SELECT id, tag_number, breed FROM cows WHERE " . farmFilter() . " ORDER BY tag_number ASC");
+$cow_list->execute();
+$cow_list = $cow_list->fetchAll();
 
 function confidence_badge(string $level): string {
     return match($level) {

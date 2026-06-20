@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('breeding');
 
 $page_title = 'Breeding';
@@ -19,11 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_breeding' && hasRole(['admin'])) {
         $br_id = (int)($_POST['br_id'] ?? 0);
         if ($br_id > 0) {
-            $sel = $db->prepare("SELECT * FROM breeding_records WHERE id = ?");
+            $sel = $db->prepare("SELECT * FROM breeding_records WHERE id = ? AND " . farmFilter());
             $sel->execute([$br_id]);
             $br = $sel->fetch();
             if ($br) {
-                $db->prepare("DELETE FROM breeding_records WHERE id = ?")->execute([$br_id]);
+                $db->prepare("DELETE FROM breeding_records WHERE id = ? AND " . farmFilter())->execute([$br_id]);
                 auditLog($user_id, 'DELETE_BREEDING_RECORD', 'breeding_records', $br_id, $br, null);
                 flashMessage('success', 'Breeding record deleted.');
             }
@@ -43,14 +45,14 @@ $filter_cow     = (int)($_GET['cow_id'] ?? 0);
 $page           = max(1, (int)($_GET['page'] ?? 1));
 $per_page       = 20;
 
-$where  = ['1=1'];
+$where  = [farmFilter('br')];
 $params = [];
 if ($filter_status !== '') { $where[] = 'br.status = ?'; $params[] = $filter_status; }
 if ($filter_cow > 0)       { $where[] = 'br.cow_id = ?'; $params[] = $filter_cow; }
 $where_sql = implode(' AND ', $where);
 
 // KPIs (always all records)
-$kpi = $db->query(
+$kpi = $db->prepare(
     "SELECT
        SUM(status='pregnant')                                                          AS pregnant_cnt,
        SUM(status IN ('heat','inseminated'))                                           AS active_cnt,
@@ -58,13 +60,17 @@ $kpi = $db->query(
        SUM(status='failed')                                                            AS failed_cnt,
        SUM(status='pregnant' AND expected_calving_date IS NOT NULL
            AND DATEDIFF(expected_calving_date, CURDATE()) BETWEEN 0 AND 14)           AS calving_soon
-     FROM breeding_records"
-)->fetch();
+     FROM breeding_records WHERE " . farmFilter()
+);
+$kpi->execute();
+$kpi = $kpi->fetch();
 
 // Status counts for filter pills
-$sc_rows = $db->query(
-    "SELECT status, COUNT(*) AS cnt FROM breeding_records GROUP BY status"
-)->fetchAll();
+$sc_rows = $db->prepare(
+    "SELECT status, COUNT(*) AS cnt FROM breeding_records WHERE " . farmFilter() . " GROUP BY status"
+);
+$sc_rows->execute();
+$sc_rows = $sc_rows->fetchAll();
 $status_counts = [];
 foreach ($sc_rows as $r) $status_counts[$r['status']] = (int)$r['cnt'];
 $total_all = (int)array_sum($status_counts);
@@ -93,7 +99,9 @@ $stmt = $db->prepare(
 $stmt->execute(array_merge($params, [$per_page, $pager['offset']]));
 $records = $stmt->fetchAll();
 
-$cow_list = $db->query("SELECT id, tag_number, breed FROM cows ORDER BY tag_number ASC")->fetchAll();
+$cow_list = $db->prepare("SELECT id, tag_number, breed FROM cows WHERE " . farmFilter() . " ORDER BY tag_number ASC");
+$cow_list->execute();
+$cow_list = $cow_list->fetchAll();
 
 function breeding_status_badge(string $s): string {
     return match($s) {

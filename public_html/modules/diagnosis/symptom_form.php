@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'veterinarian']);
+requireFarmScope();
 requireModule('diagnosis');
 
 $db = getDB();
@@ -24,9 +26,11 @@ $form = [
     'notes'            => '',
 ];
 
-$cow_list = $db->query(
-    "SELECT id, tag_number, breed FROM cows WHERE status NOT IN ('sold') ORDER BY tag_number ASC"
-)->fetchAll();
+$cow_list = $db->prepare(
+    "SELECT id, tag_number, breed FROM cows WHERE " . farmFilter() . " AND status NOT IN ('sold') ORDER BY tag_number ASC"
+);
+$cow_list->execute();
+$cow_list = $cow_list->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
@@ -66,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $cow = null;
     if (empty($errors)) {
-        $sel = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ?");
+        $sel = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ? AND " . farmFilter());
         $sel->execute([$cow_id]);
         $cow = $sel->fetch();
         if (!$cow) $errors[] = 'Cow not found.';

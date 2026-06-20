@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'veterinarian']);
+requireFarmScope();
 requireModule('diagnosis');
 
 $db      = getDB();
@@ -19,12 +21,14 @@ $form = [
     'photo_url'          => null,
 ];
 
-$cow_list = $db->query(
-    "SELECT id, tag_number, breed FROM cows ORDER BY tag_number ASC"
-)->fetchAll();
+$cow_list = $db->prepare(
+    "SELECT id, tag_number, breed FROM cows WHERE " . farmFilter() . " ORDER BY tag_number ASC"
+);
+$cow_list->execute();
+$cow_list = $cow_list->fetchAll();
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM diagnosis_records WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM diagnosis_records WHERE id = ? AND " . farmFilter());
     $sel->execute([$diag_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -65,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $cow = null;
     if (empty($errors)) {
-        $sel = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ?");
+        $sel = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ? AND " . farmFilter());
         $sel->execute([$cow_id]);
         $cow = $sel->fetch();
         if (!$cow) $errors[] = 'Cow not found.';
@@ -88,15 +92,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($is_edit) {
             $db->prepare(
-                "UPDATE diagnosis_records SET cow_id=?, diagnosis=?, confidence_level=?, recommended_action=?, photo_url=? WHERE id=?"
+                "UPDATE diagnosis_records SET cow_id=?, diagnosis=?, confidence_level=?, recommended_action=?, photo_url=? WHERE id=? AND " . farmFilter()
             )->execute([$cow_id, $form['diagnosis'], $form['confidence_level'], $action_val, $photo_url, $diag_id]);
             auditLog($user_id, 'UPDATE_DIAGNOSIS', 'diagnosis_records', $diag_id, $existing, $form);
             flashMessage('success', "Diagnosis for Cow #{$cow['tag_number']} updated.");
         } else {
             $db->prepare(
-                "INSERT INTO diagnosis_records (cow_id, diagnosis, confidence_level, recommended_action, veterinarian_id, photo_url)
-                 VALUES (?,?,?,?,?,?)"
-            )->execute([$cow_id, $form['diagnosis'], $form['confidence_level'], $action_val, $user_id, $photo_url]);
+                "INSERT INTO diagnosis_records (farm_id, cow_id, diagnosis, confidence_level, recommended_action, veterinarian_id, photo_url)
+                 VALUES (?,?,?,?,?,?,?)"
+            )->execute([fid(), $cow_id, $form['diagnosis'], $form['confidence_level'], $action_val, $user_id, $photo_url]);
             $new_id = (int)$db->lastInsertId();
             auditLog($user_id, 'CREATE_DIAGNOSIS', 'diagnosis_records', $new_id, null, $form);
             flashMessage('success', "Diagnosis recorded for Cow #{$cow['tag_number']}.");

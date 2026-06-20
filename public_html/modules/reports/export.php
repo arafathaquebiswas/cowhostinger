@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('reports');
 
 $db   = getDB();
@@ -53,7 +55,7 @@ switch ($type) {
     case 'cows':
         $status_filter  = sanitize($_GET['status'] ?? '');
         $valid_statuses = ['active','pregnant','lactating','dry','sick','quarantine','ready_for_sale','sold','deceased'];
-        $where  = ['1=1'];
+        $where  = [farmFilter('c')];
         $params = [];
         if (in_array($status_filter, $valid_statuses, true)) { $where[] = 'c.status = ?'; $params[] = $status_filter; }
         if ($date_from) { $where[] = 'DATE(c.created_at) >= ?'; $params[] = $date_from; }
@@ -82,7 +84,7 @@ switch ($type) {
     // ── MILK ────────────────────────────────────────────────────────────────
     case 'milk':
         $contam = $_GET['contamination'] ?? '';
-        $where  = ['1=1'];
+        $where  = [farmFilter('mr')];
         $params = [];
         if ($date_from) { $where[] = 'DATE(mr.recorded_at) >= ?'; $params[] = $date_from; }
         if ($date_to)   { $where[] = 'DATE(mr.recorded_at) <= ?'; $params[] = $date_to; }
@@ -111,7 +113,7 @@ switch ($type) {
     // ── FINANCE ─────────────────────────────────────────────────────────────
     case 'finance':
         $txn_type = sanitize($_GET['txn_type'] ?? '');
-        $where  = ['1=1'];
+        $where  = [farmFilter('ft')];
         $params = [];
         if ($date_from) { $where[] = 'ft.transaction_date >= ?'; $params[] = $date_from; }
         if ($date_to)   { $where[] = 'ft.transaction_date <= ?'; $params[] = $date_to; }
@@ -135,7 +137,7 @@ switch ($type) {
 
     // ── TREATMENTS ──────────────────────────────────────────────────────────
     case 'treatments':
-        $where  = ['1=1'];
+        $where  = [farmFilter('t')];
         $params = [];
         if ($date_from) { $where[] = 't.treatment_date >= ?'; $params[] = $date_from; }
         if ($date_to)   { $where[] = 't.treatment_date <= ?'; $params[] = $date_to; }
@@ -165,7 +167,7 @@ switch ($type) {
         $sale_type = sanitize($_GET['sale_type'] ?? 'both');
         $rows = [];
         if ($sale_type !== 'meat') {
-            $w = ['1=1']; $p = [];
+            $w = [farmFilter('c')]; $p = [];
             if ($date_from) { $w[] = 'cs.sale_date >= ?'; $p[] = $date_from; }
             if ($date_to)   { $w[] = 'cs.sale_date <= ?'; $p[] = $date_to; }
             $s = $db->prepare(
@@ -179,7 +181,7 @@ switch ($type) {
             $rows = array_merge($rows, $s->fetchAll());
         }
         if ($sale_type !== 'cow') {
-            $w = ['1=1']; $p = [];
+            $w = [farmFilter('c')]; $p = [];
             if ($date_from) { $w[] = 'ms.sale_date >= ?'; $p[] = $date_from; }
             if ($date_to)   { $w[] = 'ms.sale_date <= ?'; $p[] = $date_to; }
             $s = $db->prepare(
@@ -209,7 +211,7 @@ switch ($type) {
     case 'breeding':
         $br_status = sanitize($_GET['br_status'] ?? '');
         $valid_br  = ['heat','inseminated','pregnant','calved','failed'];
-        $where  = ['1=1'];
+        $where  = [farmFilter('br')];
         $params = [];
         if (in_array($br_status, $valid_br, true)) { $where[] = 'br.status = ?'; $params[] = $br_status; }
         if ($date_from) { $where[] = 'DATE(br.created_at) >= ?'; $params[] = $date_from; }
@@ -243,7 +245,7 @@ switch ($type) {
     // ── WORKERS ─────────────────────────────────────────────────────────────
     case 'workers':
         $w_status = sanitize($_GET['worker_status'] ?? '');
-        $where  = ['1=1'];
+        $where  = [farmFilter('u')];
         $params = [];
         if (in_array($w_status, ['active','inactive','terminated'], true)) { $where[] = 'w.status = ?'; $params[] = $w_status; }
 

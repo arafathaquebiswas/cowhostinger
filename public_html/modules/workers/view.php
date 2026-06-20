@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'reception']);
+requireFarmScope();
 requireModule('workers');
 
 $db        = getDB();
@@ -12,7 +14,7 @@ $stmt = $db->prepare(
             u.id AS user_id, u.name, u.email, u.role, u.status AS user_status, u.created_at AS user_created
      FROM workers w
      JOIN users u ON u.id = w.user_id
-     WHERE w.id = ?"
+     WHERE w.id = ? AND " . farmFilter('u')
 );
 $stmt->execute([$worker_id]);
 $worker = $stmt->fetch();

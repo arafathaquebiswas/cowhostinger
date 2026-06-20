@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('workers');
 
 $page_title = 'Task Management';
@@ -30,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         elseif (strlen($task_type) > 100) $err = 'Task type is too long.';
         elseif ($assigned_date === '' || !strtotime($assigned_date)) $err = 'Valid assigned date is required.';
         else {
-            $chk = $db->prepare("SELECT id FROM workers WHERE id = ? AND status = 'active'");
+            $chk = $db->prepare("SELECT w.id FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ? AND w.status = 'active' AND " . farmFilter('u'));
             $chk->execute([$worker_id]);
             if (!$chk->fetch()) $err = 'Selected worker is invalid or inactive.';
         }
@@ -39,9 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('error', $err);
         } else {
             $db->prepare(
-                "INSERT INTO worker_tasks (worker_id, task_type, description, assigned_date, status)
-                 VALUES (?,?,?,?,'pending')"
-            )->execute([$worker_id, $task_type, $description ?: null, $assigned_date]);
+                "INSERT INTO worker_tasks (farm_id, worker_id, task_type, description, assigned_date, status)
+                 VALUES (?,?,?,?,?,'pending')"
+            )->execute([fid(), $worker_id, $task_type, $description ?: null, $assigned_date]);
             $new_id = (int)$db->lastInsertId();
             auditLog($user_id, 'ASSIGN_TASK', 'worker_tasks', $new_id, null, [
                 'worker_id' => $worker_id, 'task_type' => $task_type, 'assigned_date' => $assigned_date,
@@ -57,7 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new_status = sanitize($_POST['new_status'] ?? '');
         $valid      = ['pending','in_progress','completed','overdue'];
         if ($task_id > 0 && in_array($new_status, $valid, true)) {
-            $sel = $db->prepare("SELECT id, status FROM worker_tasks WHERE id = ?");
+            $sel = $db->prepare(
+                "SELECT wt.id, wt.status FROM worker_tasks wt
+                 JOIN workers w ON w.id = wt.worker_id
+                 JOIN users u ON u.id = w.user_id
+                 WHERE wt.id = ? AND " . farmFilter('u')
+            );
             $sel->execute([$task_id]);
             $t = $sel->fetch();
             if ($t) {
@@ -79,7 +86,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_task') {
         $task_id = (int)($_POST['task_id'] ?? 0);
         if ($task_id > 0) {
-            $sel = $db->prepare("SELECT id, task_type FROM worker_tasks WHERE id = ?");
+            $sel = $db->prepare(
+                "SELECT wt.id, wt.task_type FROM worker_tasks wt
+                 JOIN workers w ON w.id = wt.worker_id
+                 JOIN users u ON u.id = w.user_id
+                 WHERE wt.id = ? AND " . farmFilter('u')
+            );
             $sel->execute([$task_id]);
             $t = $sel->fetch();
             if ($t) {
@@ -103,7 +115,7 @@ $per_page      = 25;
 $valid_statuses = ['pending','in_progress','completed','overdue'];
 if (!in_array($filter_status, $valid_statuses, true)) $filter_status = '';
 
-$where  = ['1=1'];
+$where  = [farmFilter('u')];
 $params = [];
 if ($filter_worker > 0) {
     $where[]  = 'wt.worker_id = ?';
@@ -116,7 +128,10 @@ if ($filter_status !== '') {
 $where_sql = implode(' AND ', $where);
 
 $count_stmt = $db->prepare(
-    "SELECT COUNT(*) FROM worker_tasks wt WHERE {$where_sql}"
+    "SELECT COUNT(*) FROM worker_tasks wt
+     JOIN workers w ON w.id = wt.worker_id
+     JOIN users u ON u.id = w.user_id
+     WHERE {$where_sql}"
 );
 $count_stmt->execute($params);
 $total = (int)$count_stmt->fetchColumn();
@@ -137,17 +152,25 @@ $stmt->execute($fetch_params);
 $tasks = $stmt->fetchAll();
 
 // All active workers for assign form + filter dropdown
-$all_workers = $db->query(
+$aw_stmt = $db->prepare(
     "SELECT w.id, u.name FROM workers w
      JOIN users u ON u.id = w.user_id
-     WHERE w.status = 'active'
+     WHERE w.status = 'active' AND " . farmFilter('u') . "
      ORDER BY u.name ASC"
-)->fetchAll();
+);
+$aw_stmt->execute();
+$all_workers = $aw_stmt->fetchAll();
 
 // Summary counts
-$summary = $db->query(
-    "SELECT status, COUNT(*) AS cnt FROM worker_tasks GROUP BY status"
-)->fetchAll(PDO::FETCH_KEY_PAIR);
+$sum_stmt = $db->prepare(
+    "SELECT wt.status, COUNT(*) AS cnt FROM worker_tasks wt
+     JOIN workers w ON w.id = wt.worker_id
+     JOIN users u ON u.id = w.user_id
+     WHERE " . farmFilter('u') . "
+     GROUP BY wt.status"
+);
+$sum_stmt->execute();
+$summary = $sum_stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
 function task_badge(string $s): string {
     return match($s) {

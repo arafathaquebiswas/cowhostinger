@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('milk');
 
 $page_title = 'Milk Production';
@@ -17,11 +19,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($_POST['action'] === 'delete' && hasRole(['admin'])) {
         $del_id = (int)($_POST['record_id'] ?? 0);
         if ($del_id > 0) {
-            $sel = $db->prepare("SELECT id, cow_id, liters, recorded_at FROM milk_records WHERE id = ?");
+            $sel = $db->prepare("SELECT id, cow_id, liters, recorded_at FROM milk_records WHERE id = ? AND " . farmFilter());
             $sel->execute([$del_id]);
             $rec = $sel->fetch();
             if ($rec) {
-                $db->prepare("DELETE FROM milk_records WHERE id = ?")->execute([$del_id]);
+                $db->prepare("DELETE FROM milk_records WHERE id = ? AND " . farmFilter())->execute([$del_id]);
                 auditLog((int)$_SESSION['user_id'], 'DELETE_MILK_RECORD', 'milk_records', $del_id, $rec, null);
                 flashMessage('success', 'Milk record deleted.');
             }
@@ -44,7 +46,7 @@ $page          = max(1, (int)($_GET['page'] ?? 1));
 $per_page      = 30;
 
 // Build WHERE
-$where  = ['1=1'];
+$where  = [farmFilter('mr')];
 $params = [];
 if ($date_from !== '' && strtotime($date_from)) {
     $where[]  = 'mr.recorded_at >= ?';
@@ -66,15 +68,21 @@ if ($contamination === '1') {
 $where_sql = implode(' AND ', $where);
 
 // Summary stats (always from full table)
-$today_row = $db->query(
+$today_row = $db->prepare(
     "SELECT COALESCE(SUM(liters),0) AS ltr, COUNT(*) AS cnt
-     FROM milk_records WHERE DATE(recorded_at) = CURDATE()"
-)->fetch();
-$week_row = $db->query(
+     FROM milk_records WHERE " . farmFilter() . " AND DATE(recorded_at) = CURDATE()"
+);
+$today_row->execute();
+$today_row = $today_row->fetch();
+$week_row = $db->prepare(
     "SELECT COALESCE(SUM(liters),0) AS ltr
-     FROM milk_records WHERE recorded_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)"
-)->fetch();
-$total_row = $db->query("SELECT COALESCE(SUM(liters),0) AS ltr, COUNT(*) AS cnt FROM milk_records")->fetch();
+     FROM milk_records WHERE " . farmFilter() . " AND recorded_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)"
+);
+$week_row->execute();
+$week_row = $week_row->fetch();
+$total_row = $db->prepare("SELECT COALESCE(SUM(liters),0) AS ltr, COUNT(*) AS cnt FROM milk_records WHERE " . farmFilter());
+$total_row->execute();
+$total_row = $total_row->fetch();
 $price_row = $db->query(
     "SELECT price_per_liter FROM milk_price_history
      WHERE effective_date <= CURDATE()
@@ -106,24 +114,28 @@ $stmt->execute($fetch_params);
 $records = $stmt->fetchAll();
 
 // Cows for filter dropdown (all non-deceased)
-$cows_list = $db->query(
+$cows_list = $db->prepare(
     "SELECT id, tag_number, breed FROM cows
-     WHERE status NOT IN ('sold','deceased')
+     WHERE " . farmFilter() . " AND status NOT IN ('sold','deceased')
      ORDER BY tag_number ASC"
-)->fetchAll();
+);
+$cows_list->execute();
+$cows_list = $cows_list->fetchAll();
 
-$top_producers = $db->query(
+$top_producers = $db->prepare(
     "SELECT c.id, c.tag_number, c.breed,
             COALESCE(SUM(mr.liters),0) AS total_liters,
             COUNT(mr.id) AS record_count,
             ROUND(AVG(mr.liters), 2) AS avg_liters
      FROM milk_records mr
      JOIN cows c ON c.id = mr.cow_id
-     WHERE mr.recorded_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+     WHERE " . farmFilter('mr') . " AND mr.recorded_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
      GROUP BY c.id, c.tag_number, c.breed
      ORDER BY total_liters DESC
      LIMIT 5"
-)->fetchAll();
+);
+$top_producers->execute();
+$top_producers = $top_producers->fetchAll();
 
 $qs = static fn(array $p): string =>
     '/modules/milk/index.php?' . http_build_query(array_filter($p, static fn($v) => $v !== '' && $v !== null && $v !== 0));

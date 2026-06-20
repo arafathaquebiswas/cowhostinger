@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('finance');
 
 $page_title = 'Finance Charts';
@@ -8,16 +10,17 @@ $active_nav = 'finance_charts';
 $db = getDB();
 
 // Last 12 months — income vs expense
-$monthly_stmt = $db->query(
+$monthly_stmt = $db->prepare(
     "SELECT DATE_FORMAT(transaction_date,'%Y-%m')  AS ym,
             DATE_FORMAT(transaction_date,'%b %Y')   AS label,
             SUM(CASE WHEN type='income'  THEN amount ELSE 0 END) AS income,
             SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) AS expense
      FROM finance_transactions
-     WHERE transaction_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+     WHERE " . farmFilter() . " AND transaction_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
      GROUP BY ym, label
      ORDER BY ym ASC"
 );
+$monthly_stmt->execute();
 $monthly_raw = [];
 foreach ($monthly_stmt->fetchAll() as $r) {
     $monthly_raw[$r['ym']] = $r;
@@ -38,15 +41,16 @@ for ($i = 11; $i >= 0; $i--) {
 }
 
 // Year-over-year: current year vs previous year by month
-$yoy_stmt = $db->query(
+$yoy_stmt = $db->prepare(
     "SELECT YEAR(transaction_date) AS yr, MONTH(transaction_date) AS mo,
             SUM(CASE WHEN type='income'  THEN amount ELSE 0 END) AS income,
             SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) AS expense
      FROM finance_transactions
-     WHERE YEAR(transaction_date) IN (YEAR(CURDATE()), YEAR(CURDATE())-1)
+     WHERE " . farmFilter() . " AND YEAR(transaction_date) IN (YEAR(CURDATE()), YEAR(CURDATE())-1)
      GROUP BY yr, mo
      ORDER BY yr, mo"
 );
+$yoy_stmt->execute();
 $curr_yr = (int)date('Y');
 $prev_yr = $curr_yr - 1;
 $yoy_data = [$curr_yr => [], $prev_yr => []];
@@ -73,7 +77,7 @@ $cat_stmt = $db->prepare(
     "SELECT category, type,
             SUM(amount) AS total
      FROM finance_transactions
-     WHERE YEAR(transaction_date) = ?
+     WHERE " . farmFilter() . " AND YEAR(transaction_date) = ?
      GROUP BY category, type
      ORDER BY total DESC
      LIMIT 20"
@@ -108,7 +112,7 @@ $js_r_palette  = json_encode($palette_red,   JSON_THROW_ON_ERROR);
 $yr_kpi = $db->prepare(
     "SELECT SUM(CASE WHEN type='income'  THEN amount ELSE 0 END) AS income,
             SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) AS expense
-     FROM finance_transactions WHERE YEAR(transaction_date) = ?"
+     FROM finance_transactions WHERE " . farmFilter() . " AND YEAR(transaction_date) = ?"
 );
 $yr_kpi->execute([$curr_yr]);
 $yr_row = $yr_kpi->fetch();
@@ -117,7 +121,7 @@ $yr_net = (float)$yr_row['income'] - (float)$yr_row['expense'];
 $prev_yr_kpi = $db->prepare(
     "SELECT SUM(CASE WHEN type='income'  THEN amount ELSE 0 END) AS income,
             SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) AS expense
-     FROM finance_transactions WHERE YEAR(transaction_date) = ?"
+     FROM finance_transactions WHERE " . farmFilter() . " AND YEAR(transaction_date) = ?"
 );
 $prev_yr_kpi->execute([$prev_yr]);
 $prev_yr_row = $prev_yr_kpi->fetch();

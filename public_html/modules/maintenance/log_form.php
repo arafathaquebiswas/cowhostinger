@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('maintenance');
 
 $db     = getDB();
@@ -20,11 +22,16 @@ $form = [
     'photo_url'      => null,
 ];
 
-$equipment_list = $db->query("SELECT id, name FROM equipment ORDER BY name ASC")->fetchAll();
-$area_list      = $db->query("SELECT id, name FROM farm_areas ORDER BY name ASC")->fetchAll();
+$eq_stmt = $db->prepare("SELECT id, name FROM equipment WHERE " . farmFilter() . " ORDER BY name ASC");
+$eq_stmt->execute();
+$equipment_list = $eq_stmt->fetchAll();
+
+$al_stmt = $db->prepare("SELECT id, name FROM farm_areas WHERE " . farmFilter() . " ORDER BY name ASC");
+$al_stmt->execute();
+$area_list = $al_stmt->fetchAll();
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM maintenance_logs WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM maintenance_logs WHERE id = ? AND " . farmFilter());
     $sel->execute([$log_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -73,12 +80,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($equipment_id !== null) {
-        $chk = $db->prepare("SELECT id FROM equipment WHERE id = ?");
+        $chk = $db->prepare("SELECT id FROM equipment WHERE id = ? AND " . farmFilter());
         $chk->execute([$equipment_id]);
         if (!$chk->fetch()) { $errors[] = 'Invalid equipment selected.'; $equipment_id = null; }
     }
     if ($area_id !== null) {
-        $chk = $db->prepare("SELECT id FROM farm_areas WHERE id = ?");
+        $chk = $db->prepare("SELECT id FROM farm_areas WHERE id = ? AND " . farmFilter());
         $chk->execute([$area_id]);
         if (!$chk->fetch()) { $errors[] = 'Invalid farm area selected.'; $area_id = null; }
     }
@@ -102,15 +109,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($is_edit) {
             $db->prepare(
                 "UPDATE maintenance_logs SET equipment_id=?, area_id=?, description=?, cost=?,
-                 scheduled_date=?, completed_date=?, photo_url=? WHERE id=?"
+                 scheduled_date=?, completed_date=?, photo_url=? WHERE id=? AND " . farmFilter()
             )->execute([$equipment_id, $area_id, $form['description'], $cost, $sched_val, $compl_val, $photo_url, $log_id]);
             auditLog($user_id, 'UPDATE_MAINTENANCE_LOG', 'maintenance_logs', $log_id, $existing, $form);
             flashMessage('success', 'Maintenance log updated.');
         } else {
             $db->prepare(
-                "INSERT INTO maintenance_logs (equipment_id, area_id, description, cost, scheduled_date, completed_date, photo_url)
-                 VALUES (?,?,?,?,?,?,?)"
-            )->execute([$equipment_id, $area_id, $form['description'], $cost, $sched_val, $compl_val, $photo_url]);
+                "INSERT INTO maintenance_logs (farm_id, equipment_id, area_id, description, cost, scheduled_date, completed_date, photo_url)
+                 VALUES (?,?,?,?,?,?,?,?)"
+            )->execute([fid(), $equipment_id, $area_id, $form['description'], $cost, $sched_val, $compl_val, $photo_url]);
             $new_id = (int)$db->lastInsertId();
 
             // Auto-create finance transaction if cost > 0
@@ -118,9 +125,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $target = $equipment_id ? 'equipment' : ($area_id ? 'area' : 'general');
                 $fn = "Maintenance cost ({$target})";
                 $db->prepare(
-                    "INSERT INTO finance_transactions (type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
-                     VALUES ('expense','Maintenance Cost',?,?,?,?,?,?,?)"
-                )->execute([$cost, 'maintenance', $new_id, date('Y-m-d'), $user_id, $user_id, $fn]);
+                    "INSERT INTO finance_transactions (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
+                     VALUES (?, 'expense','Maintenance Cost',?,?,?,?,?,?,?)"
+                )->execute([fid(), $cost, 'maintenance', $new_id, date('Y-m-d'), $user_id, $user_id, $fn]);
             }
 
             auditLog($user_id, 'CREATE_MAINTENANCE_LOG', 'maintenance_logs', $new_id, null, $form);

@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'veterinarian', 'reception']);
+requireFarmScope();
 requireModule('breeding');
 
 $db    = getDB();
@@ -22,12 +24,14 @@ $form = [
     'notes'                 => '',
 ];
 
-$cow_list = $db->query(
-    "SELECT id, tag_number, breed FROM cows WHERE status NOT IN ('sold','deceased') ORDER BY tag_number ASC"
-)->fetchAll();
+$cow_list = $db->prepare(
+    "SELECT id, tag_number, breed FROM cows WHERE " . farmFilter() . " AND status NOT IN ('sold','deceased') ORDER BY tag_number ASC"
+);
+$cow_list->execute();
+$cow_list = $cow_list->fetchAll();
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM breeding_records WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM breeding_records WHERE id = ? AND " . farmFilter());
     $sel->execute([$br_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -86,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $cow = null;
     if (empty($errors)) {
-        $sel = $db->prepare("SELECT id, tag_number, status, is_pregnant FROM cows WHERE id = ? AND status NOT IN ('sold','deceased')");
+        $sel = $db->prepare("SELECT id, tag_number, status, is_pregnant FROM cows WHERE id = ? AND " . farmFilter() . " AND status NOT IN ('sold','deceased')");
         $sel->execute([$cow_id]);
         $cow = $sel->fetch();
         if (!$cow) $errors[] = 'Selected cow is not available.';
@@ -101,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($is_edit) {
             $db->prepare(
                 "UPDATE breeding_records SET cow_id=?, heat_cycle_date=?, insemination_date=?,
-                 breeding_date=?, expected_calving_date=?, actual_calving_date=?, status=?, notes=? WHERE id=?"
+                 breeding_date=?, expected_calving_date=?, actual_calving_date=?, status=?, notes=? WHERE id=? AND " . farmFilter()
             )->execute([
                 $cow_id, $nullify($form['heat_cycle_date']), $nullify($form['insemination_date']),
                 $nullify($form['breeding_date']), $nullify($form['expected_calving_date']),
@@ -112,11 +116,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $db->prepare(
                 "INSERT INTO breeding_records
-                 (cow_id, heat_cycle_date, insemination_date, breeding_date,
+                 (farm_id, cow_id, heat_cycle_date, insemination_date, breeding_date,
                   expected_calving_date, actual_calving_date, status, recorded_by, notes)
-                 VALUES (?,?,?,?,?,?,?,?,?)"
+                 VALUES (?,?,?,?,?,?,?,?,?,?)"
             )->execute([
-                $cow_id, $nullify($form['heat_cycle_date']), $nullify($form['insemination_date']),
+                fid(), $cow_id, $nullify($form['heat_cycle_date']), $nullify($form['insemination_date']),
                 $nullify($form['breeding_date']), $nullify($form['expected_calving_date']),
                 $nullify($form['actual_calving_date']), $form['status'], $user_id, $nullify($form['notes']),
             ]);

@@ -140,8 +140,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $prev_weight = $existing['current_weight'] !== null ? (float)$existing['current_weight'] : null;
             if ($weight !== null && $weight !== $prev_weight) {
                 $db->prepare(
-                    "INSERT INTO cow_weight_logs (cow_id, weight, recorded_by) VALUES (?,?,?)"
-                )->execute([$cow_id, $weight, $user_id]);
+                    "INSERT INTO cow_weight_logs (farm_id, cow_id, weight, recorded_by) VALUES (?,?,?,?)"
+                )->execute([fid(), $cow_id, $weight, $user_id]);
             }
 
             auditLog($user_id, 'UPDATE_COW', 'cows', $cow_id, $existing, array_merge($cow, ['photo_url' => $photo_url]));
@@ -165,8 +165,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($weight !== null) {
                 $db->prepare(
-                    "INSERT INTO cow_weight_logs (cow_id, weight, recorded_by) VALUES (?,?,?)"
-                )->execute([$new_id, $weight, $user_id]);
+                    "INSERT INTO cow_weight_logs (farm_id, cow_id, weight, recorded_by) VALUES (?,?,?,?)"
+                )->execute([fid(), $new_id, $weight, $user_id]);
             }
 
             auditLog($user_id, 'CREATE_COW', 'cows', $new_id, null, $cow);

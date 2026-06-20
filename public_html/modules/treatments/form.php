@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'veterinarian']);
+requireFarmScope();
 requireModule('cows');
 
 $db      = getDB();
@@ -16,7 +18,7 @@ if ($is_edit) {
     $s = $db->prepare(
         "SELECT t.*, c.tag_number
          FROM treatments t JOIN cows c ON c.id = t.cow_id
-         WHERE t.id = ?"
+         WHERE t.id = ? AND " . farmFilter('t')
     );
     $s->execute([$edit_id]);
     $treatment = $s->fetch();
@@ -66,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Verify cow exists
     if ($form['cow_id'] > 0 && empty($errors)) {
-        $cow_chk = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ?");
+        $cow_chk = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ? AND " . farmFilter());
         $cow_chk->execute([$form['cow_id']]);
         $cow_row = $cow_chk->fetch();
         if (!$cow_row) $errors[] = 'Selected cow not found.';
@@ -74,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Verify medicine exists if provided
     if ($medicine_id !== null && empty($errors)) {
-        $med_chk = $db->prepare("SELECT id, item_name FROM medicine_inventory WHERE id = ?");
+        $med_chk = $db->prepare("SELECT id, item_name FROM medicine_inventory WHERE id = ? AND " . farmFilter());
         $med_chk->execute([$medicine_id]);
         if (!$med_chk->fetch()) $errors[] = 'Selected medicine not found.';
     }
@@ -108,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare(
                 "UPDATE treatments SET cow_id=?, medicine_id=?, administered_by=?, dosage=?,
                         cost=?, treatment_date=?, notes=?, photo_url=?
-                 WHERE id=?"
+                 WHERE id=? AND " . farmFilter()
             )->execute([
                 $form['cow_id'], $medicine_id, $administered_by, $dosage,
                 $cost, $form['treatment_date'], $notes, $photo_url,
@@ -118,10 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', 'Treatment record updated.');
         } else {
             $db->prepare(
-                "INSERT INTO treatments (cow_id, medicine_id, administered_by, dosage, cost, treatment_date, notes, photo_url)
-                 VALUES (?,?,?,?,?,?,?,?)"
+                "INSERT INTO treatments (farm_id, cow_id, medicine_id, administered_by, dosage, cost, treatment_date, notes, photo_url)
+                 VALUES (?,?,?,?,?,?,?,?,?)"
             )->execute([
-                $form['cow_id'], $medicine_id, $administered_by, $dosage,
+                fid(), $form['cow_id'], $medicine_id, $administered_by, $dosage,
                 $cost, $form['treatment_date'], $notes, $photo_url,
             ]);
             $new_id = (int)$db->lastInsertId();
@@ -132,9 +134,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $fin_notes = "Veterinary treatment - Cow #{$cow_tag}"
                            . ($dosage ? " ({$dosage})" : '');
                 $db->prepare(
-                    "INSERT INTO finance_transactions (type, category, amount, related_module, transaction_date, notes, recorded_by)
-                     VALUES ('expense', 'Veterinary Treatment', ?, 'cows', ?, ?, ?)"
-                )->execute([$cost, $form['treatment_date'], $fin_notes, $user_id]);
+                    "INSERT INTO finance_transactions (farm_id, type, category, amount, related_module, transaction_date, notes, recorded_by)
+                     VALUES (?, 'expense', 'Veterinary Treatment', ?, 'cows', ?, ?, ?)"
+                )->execute([fid(), $cost, $form['treatment_date'], $fin_notes, $user_id]);
             }
 
             auditLog($user_id, 'CREATE_TREATMENT', 'treatments', $new_id, null, [
@@ -153,8 +155,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Dropdowns
-$cows     = $db->query("SELECT id, tag_number, breed FROM cows WHERE status NOT IN ('sold','deceased') ORDER BY tag_number ASC")->fetchAll();
-$medicines = $db->query("SELECT id, item_name, quantity, unit FROM medicine_inventory ORDER BY item_name ASC")->fetchAll();
+$cows = $db->prepare("SELECT id, tag_number, breed FROM cows WHERE " . farmFilter() . " AND status NOT IN ('sold','deceased') ORDER BY tag_number ASC");
+$cows->execute();
+$cows = $cows->fetchAll();
+$medicines = $db->prepare("SELECT id, item_name, quantity, unit FROM medicine_inventory WHERE " . farmFilter() . " ORDER BY item_name ASC");
+$medicines->execute();
+$medicines = $medicines->fetchAll();
 
 $page_title = $is_edit ? 'Edit Treatment' : 'Add Treatment';
 $active_nav = 'treatments';

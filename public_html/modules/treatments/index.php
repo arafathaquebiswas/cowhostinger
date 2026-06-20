@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('cows');
 
 $page_title = 'Treatments';
@@ -23,11 +25,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete') {
         $t_id = (int)($_POST['treatment_id'] ?? 0);
         if ($t_id > 0) {
-            $sel = $db->prepare("SELECT * FROM treatments WHERE id = ?");
+            $sel = $db->prepare("SELECT * FROM treatments WHERE id = ? AND " . farmFilter());
             $sel->execute([$t_id]);
             $t = $sel->fetch();
             if ($t) {
-                $db->prepare("DELETE FROM treatments WHERE id = ?")->execute([$t_id]);
+                $db->prepare("DELETE FROM treatments WHERE id = ? AND " . farmFilter())->execute([$t_id]);
                 auditLog($user_id, 'DELETE_TREATMENT', 'treatments', $t_id, $t, null);
                 flashMessage('success', 'Treatment record deleted.');
             }
@@ -49,7 +51,7 @@ $date_to     = trim($_GET['date_to']    ?? '');
 $page        = max(1, (int)($_GET['page'] ?? 1));
 $per_page    = 25;
 
-$where  = ['1=1'];
+$where  = [farmFilter('t')];
 $params = [];
 if ($filter_cow > 0)                            { $where[] = 't.cow_id = ?';       $params[] = $filter_cow; }
 if ($filter_med > 0)                            { $where[] = 't.medicine_id = ?';  $params[] = $filter_med; }
@@ -58,13 +60,15 @@ if ($date_to   !== '' && strtotime($date_to))   { $where[] = 't.treatment_date <
 $where_sql = implode(' AND ', $where);
 
 // KPIs
-$kpi = $db->query(
+$kpi = $db->prepare(
     "SELECT COUNT(*) AS total,
             COALESCE(SUM(cost), 0) AS total_cost,
             SUM(MONTH(treatment_date)=MONTH(CURDATE()) AND YEAR(treatment_date)=YEAR(CURDATE())) AS this_month,
             COALESCE(SUM(CASE WHEN MONTH(treatment_date)=MONTH(CURDATE()) AND YEAR(treatment_date)=YEAR(CURDATE()) THEN cost ELSE 0 END), 0) AS month_cost
-     FROM treatments"
-)->fetch();
+     FROM treatments WHERE " . farmFilter()
+);
+$kpi->execute();
+$kpi = $kpi->fetch();
 
 // Count
 $count_stmt = $db->prepare("SELECT COUNT(*) FROM treatments t WHERE {$where_sql}");
@@ -90,8 +94,12 @@ $stmt->execute(array_merge($params, [$per_page, $pager['offset']]));
 $treatments = $stmt->fetchAll();
 
 // Dropdown lists for filters
-$cow_list = $db->query("SELECT id, tag_number, breed FROM cows ORDER BY tag_number ASC")->fetchAll();
-$med_list = $db->query("SELECT id, item_name FROM medicine_inventory ORDER BY item_name ASC")->fetchAll();
+$cow_list = $db->prepare("SELECT id, tag_number, breed FROM cows WHERE " . farmFilter() . " ORDER BY tag_number ASC");
+$cow_list->execute();
+$cow_list = $cow_list->fetchAll();
+$med_list = $db->prepare("SELECT id, item_name FROM medicine_inventory WHERE " . farmFilter() . " ORDER BY item_name ASC");
+$med_list->execute();
+$med_list = $med_list->fetchAll();
 
 $qs = static fn(array $p): string =>
     '/modules/treatments/index.php?' . http_build_query(array_filter($p, static fn($v) => $v !== '' && $v !== null && $v !== 0));

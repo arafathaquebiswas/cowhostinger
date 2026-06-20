@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('milk');
 
 $page_title = 'Milk Analytics';
@@ -25,7 +27,7 @@ $kpi = $db->prepare(
         COUNT(DISTINCT mr.cow_id)                               AS cows_recorded,
         COALESCE(SUM(mr.liters) / NULLIF(DATEDIFF(CURDATE(), ?)+1, 0), 0) AS avg_per_day
      FROM milk_records mr
-     WHERE DATE(mr.recorded_at) BETWEEN ? AND ?"
+     WHERE " . farmFilter('mr') . " AND DATE(mr.recorded_at) BETWEEN ? AND ?"
 );
 $kpi->execute([$date_start, $date_start, $today]);
 $summary = $kpi->fetch();
@@ -38,7 +40,7 @@ $contamination_rate = $summary['total_sessions'] > 0
 $daily_stmt = $db->prepare(
     "SELECT DATE(recorded_at) AS day, COALESCE(SUM(liters), 0) AS total
      FROM milk_records
-     WHERE DATE(recorded_at) BETWEEN ? AND ?
+     WHERE " . farmFilter() . " AND DATE(recorded_at) BETWEEN ? AND ?
      GROUP BY day
      ORDER BY day ASC"
 );
@@ -67,7 +69,7 @@ $top_cows_stmt = $db->prepare(
             SUM(mr.contamination_flag=1) AS contaminated_sessions
      FROM milk_records mr
      JOIN cows c ON c.id = mr.cow_id
-     WHERE DATE(mr.recorded_at) BETWEEN ? AND ?
+     WHERE " . farmFilter('mr') . " AND DATE(mr.recorded_at) BETWEEN ? AND ?
      GROUP BY c.id, c.tag_number, c.breed
      ORDER BY total_liters DESC
      LIMIT 10"
@@ -76,18 +78,19 @@ $top_cows_stmt->execute([$date_start, $today]);
 $top_cows = $top_cows_stmt->fetchAll();
 
 // Monthly breakdown (last 6 months)
-$monthly_stmt = $db->query(
+$monthly_stmt = $db->prepare(
     "SELECT DATE_FORMAT(recorded_at, '%Y-%m') AS ym,
             DATE_FORMAT(recorded_at, '%b %Y')  AS label,
             SUM(liters)                         AS total,
             COUNT(*)                            AS sessions,
             SUM(contamination_flag=1)           AS contaminated
      FROM milk_records
-     WHERE recorded_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+     WHERE " . farmFilter() . " AND recorded_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
      GROUP BY ym, label
      ORDER BY ym DESC
      LIMIT 6"
 );
+$monthly_stmt->execute();
 $monthly = $monthly_stmt->fetchAll();
 
 // Bar chart: monthly totals
@@ -102,7 +105,7 @@ foreach (array_reverse($monthly) as $m) {
 $hourly_stmt = $db->prepare(
     "SELECT HOUR(recorded_at) AS hr, COUNT(*) AS cnt
      FROM milk_records
-     WHERE DATE(recorded_at) BETWEEN ? AND ?
+     WHERE " . farmFilter() . " AND DATE(recorded_at) BETWEEN ? AND ?
      GROUP BY hr
      ORDER BY hr ASC"
 );

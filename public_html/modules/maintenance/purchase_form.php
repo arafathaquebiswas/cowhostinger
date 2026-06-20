@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('maintenance');
 
 $db          = getDB();
@@ -17,10 +19,12 @@ $form = [
     'notes'         => '',
 ];
 
-$area_list = $db->query("SELECT id, name, type FROM farm_areas ORDER BY name ASC")->fetchAll();
+$al_stmt = $db->prepare("SELECT id, name, type FROM farm_areas WHERE " . farmFilter() . " ORDER BY name ASC");
+$al_stmt->execute();
+$area_list = $al_stmt->fetchAll();
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM area_purchases WHERE id = ?");
+    $sel = $db->prepare("SELECT ap.* FROM area_purchases ap JOIN farm_areas fa ON fa.id=ap.area_id WHERE ap.id = ? AND " . farmFilter('fa'));
     $sel->execute([$purchase_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -63,9 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Purchase date cannot be in the future.';
     }
 
-    // Verify area exists
+    // Verify area exists and belongs to this farm
     if ($area_id_val) {
-        $chk = $db->prepare("SELECT id FROM farm_areas WHERE id = ?");
+        $chk = $db->prepare("SELECT id FROM farm_areas WHERE id = ? AND " . farmFilter());
         $chk->execute([$area_id_val]);
         if (!$chk->fetch()) { $errors[] = 'Invalid farm area.'; $area_id_val = null; }
     }
@@ -82,16 +86,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', 'Purchase record updated.');
         } else {
             $db->prepare(
-                "INSERT INTO area_purchases (area_id, item, cost, purchase_date, notes) VALUES (?,?,?,?,?)"
-            )->execute([$area_id_val, $form['item'], $cost, $form['purchase_date'], $notes_val]);
+                "INSERT INTO area_purchases (farm_id, area_id, item, cost, purchase_date, notes) VALUES (?,?,?,?,?,?)"
+            )->execute([fid(), $area_id_val, $form['item'], $cost, $form['purchase_date'], $notes_val]);
             $new_id = (int)$db->lastInsertId();
 
             // Auto-create finance transaction
             $fn = "Area purchase: {$form['item']}";
             $db->prepare(
-                "INSERT INTO finance_transactions (type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
-                 VALUES ('expense','Maintenance Cost',?,'area_purchases',?,?,?,?,?)"
-            )->execute([$cost, $new_id, $form['purchase_date'], $user_id, $user_id, $fn]);
+                "INSERT INTO finance_transactions (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
+                 VALUES (?, 'expense','Maintenance Cost',?,'area_purchases',?,?,?,?,?)"
+            )->execute([fid(), $cost, $new_id, $form['purchase_date'], $user_id, $user_id, $fn]);
 
             auditLog($user_id, 'CREATE_AREA_PURCHASE', 'area_purchases', $new_id, null, $form);
             flashMessage('success', 'Area purchase recorded.');

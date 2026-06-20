@@ -1,5 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/includes/role_guard.php';
+require_once dirname(__DIR__) . '/includes/farm_guard.php';
 startSecureSession();
 requireAuth();
 
@@ -10,7 +11,7 @@ if ($cow_id <= 0) {
 
 $db = getDB();
 
-$chk = $db->prepare("SELECT id FROM cows WHERE id = ?");
+$chk = $db->prepare("SELECT id FROM cows WHERE id = ? AND " . farmFilter());
 $chk->execute([$cow_id]);
 if (!$chk->fetch()) {
     jsonResponse(['error' => 'Cow not found'], 404);

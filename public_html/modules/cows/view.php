@@ -1,6 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
-requireAuth();
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
+requireFarmScope();
 requireModule('cows');
 
 $db     = getDB();
@@ -10,8 +11,8 @@ if ($cow_id <= 0) {
     redirect('/modules/cows/index.php');
 }
 
-// Load cow
-$stmt = $db->prepare("SELECT * FROM cows WHERE id = ?");
+// Load cow (scoped to current farm)
+$stmt = $db->prepare("SELECT * FROM cows WHERE id = ? AND " . farmFilter());
 $stmt->execute([$cow_id]);
 $cow = $stmt->fetch();
 if (!$cow) {
@@ -36,10 +37,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('error', 'Weight must be between 0.01 and 9999 kg.');
         } else {
             $db->prepare(
-                "INSERT INTO cow_weight_logs (cow_id, weight, recorded_by) VALUES (?,?,?)"
-            )->execute([$cow_id, $weight, $user_id]);
+                "INSERT INTO cow_weight_logs (farm_id, cow_id, weight, recorded_by) VALUES (?,?,?,?)"
+            )->execute([fid(), $cow_id, $weight, $user_id]);
             $db->prepare(
-                "UPDATE cows SET current_weight = ? WHERE id = ?"
+                "UPDATE cows SET current_weight = ? WHERE id = ? AND " . farmFilter()
             )->execute([$weight, $cow_id]);
             auditLog($user_id, 'ADD_WEIGHT_LOG', 'cow_weight_logs', null, null, ['cow_id' => $cow_id, 'weight' => $weight]);
             flashMessage('success', "Weight of {$weight} kg recorded for cow #{$cow['tag_number']}.");
@@ -53,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('error', 'This cow cannot be marked for sale (status: ' . $cow['status'] . ').');
         } else {
             $old_status = $cow['status'];
-            $db->prepare("UPDATE cows SET status = 'ready_for_sale' WHERE id = ?")->execute([$cow_id]);
+            $db->prepare("UPDATE cows SET status = 'ready_for_sale' WHERE id = ? AND " . farmFilter())->execute([$cow_id]);
             auditLog($user_id, 'MARK_FOR_SALE', 'cows', $cow_id, ['status' => $old_status], ['status' => 'ready_for_sale']);
             flashMessage('success', "Cow #{$cow['tag_number']} marked as Ready for Sale.");
         }
@@ -63,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Delete cow
     if ($action === 'delete' && hasRole(['admin'])) {
         try {
-            $db->prepare("DELETE FROM cows WHERE id = ?")->execute([$cow_id]);
+            $db->prepare("DELETE FROM cows WHERE id = ? AND " . farmFilter())->execute([$cow_id]);
             auditLog($user_id, 'DELETE_COW', 'cows', $cow_id, $cow, null);
             flashMessage('success', "Cow #{$cow['tag_number']} deleted.");
             redirect('/modules/cows/index.php');
@@ -89,7 +90,7 @@ if ($cow['birth_date']) {
     }
 }
 
-// Fetch last 20 weight logs
+// Fetch last 20 weight logs (cow_id already verified as farm-scoped above)
 $wlogs = $db->prepare(
     "SELECT cwl.id, cwl.weight, cwl.recorded_at, u.name AS recorded_by_name
      FROM cow_weight_logs cwl
@@ -109,7 +110,7 @@ $trmt = $db->prepare(
      FROM treatments t
      LEFT JOIN medicine_inventory mi ON mi.id = t.medicine_id
      JOIN  users u                   ON u.id  = t.administered_by
-     WHERE t.cow_id = ?
+     WHERE t.cow_id = ? AND " . farmFilter('t') . "
      ORDER BY t.treatment_date DESC, t.created_at DESC
      LIMIT 10"
 );
@@ -122,7 +123,7 @@ $diag = $db->prepare(
             u.name AS vet_name
      FROM diagnosis_records dr
      JOIN users u ON u.id = dr.veterinarian_id
-     WHERE dr.cow_id = ?
+     WHERE dr.cow_id = ? AND " . farmFilter('dr') . "
      ORDER BY dr.created_at DESC
      LIMIT 10"
 );
@@ -138,7 +139,7 @@ $bred = $db->prepare(
             (SELECT COUNT(*) FROM calf_records cr WHERE cr.breeding_record_id = br.id) AS calf_count
      FROM breeding_records br
      JOIN users u ON u.id = br.recorded_by
-     WHERE br.cow_id = ?
+     WHERE br.cow_id = ? AND " . farmFilter('br') . "
      ORDER BY br.created_at DESC
      LIMIT 5"
 );

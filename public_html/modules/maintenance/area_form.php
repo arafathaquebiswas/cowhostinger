@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('maintenance');
 
 $db      = getDB();
@@ -26,7 +28,7 @@ $type_options = [
 ];
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM farm_areas WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM farm_areas WHERE id = ? AND " . farmFilter());
     $sel->execute([$area_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -65,14 +67,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($is_edit) {
             $db->prepare(
-                "UPDATE farm_areas SET name=?, type=?, capacity=?, notes=? WHERE id=?"
+                "UPDATE farm_areas SET name=?, type=?, capacity=?, notes=? WHERE id=? AND " . farmFilter()
             )->execute([$form['name'], $form['type'], $capacity, $notes_val, $area_id]);
             auditLog($user_id, 'UPDATE_FARM_AREA', 'farm_areas', $area_id, $existing, $form);
             flashMessage('success', "Farm area '{$form['name']}' updated.");
         } else {
             $db->prepare(
-                "INSERT INTO farm_areas (name, type, capacity, notes) VALUES (?,?,?,?)"
-            )->execute([$form['name'], $form['type'], $capacity, $notes_val]);
+                "INSERT INTO farm_areas (farm_id, name, type, capacity, notes) VALUES (?,?,?,?,?)"
+            )->execute([fid(), $form['name'], $form['type'], $capacity, $notes_val]);
             $new_id = (int)$db->lastInsertId();
             auditLog($user_id, 'CREATE_FARM_AREA', 'farm_areas', $new_id, null, $form);
             flashMessage('success', "Farm area '{$form['name']}' added.");

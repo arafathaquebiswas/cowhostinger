@@ -6,17 +6,7 @@
  * Provides farm scoping, subscription plan enforcement, and super-admin bypass.
  */
 
-// ── Farm identity ─────────────────────────────────────────────────────────────
-
-function currentFarmId(): ?int {
-    return isset($_SESSION['farm_id']) && (int)$_SESSION['farm_id'] > 0
-        ? (int)$_SESSION['farm_id']
-        : null;
-}
-
-function currentFarm(): ?array {
-    return $_SESSION['_farm'] ?? null;
-}
+// ── Farm identity (currentFarmId/currentFarm defined in auth.php) ─────────────
 
 function isSuperAdmin(): bool {
     return ($_SESSION['user_role'] ?? '') === 'superadmin';

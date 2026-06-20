@@ -1,23 +1,46 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('reports');
 
 $page_title = 'Reports';
 $active_nav = 'reports';
 $db = getDB();
 
-// Live record counts
-$cow_count = (int)$db->query("SELECT COUNT(*) FROM cows")->fetchColumn();
-$milk_count= (int)$db->query("SELECT COUNT(*) FROM milk_records")->fetchColumn();
-$fin_count = (int)$db->query("SELECT COUNT(*) FROM finance_transactions")->fetchColumn();
-$cs_count  = (int)$db->query("SELECT COUNT(*) FROM cow_sales")->fetchColumn();
-$ms_count  = (int)$db->query("SELECT COUNT(*) FROM meat_sales")->fetchColumn();
-$br_count  = (int)$db->query("SELECT COUNT(*) FROM breeding_records")->fetchColumn();
-$tr_count  = (int)$db->query("SELECT COUNT(*) FROM treatments")->fetchColumn();
-$cow_statuses = $db->query("SELECT DISTINCT status FROM cows ORDER BY status")->fetchAll(PDO::FETCH_COLUMN);
+// Live record counts (scoped to current farm)
+$cnt = static function(string $table, string $alias = '') use ($db): int {
+    $col = $alias ? "{$alias}.farm_id" : 'farm_id';
+    $stmt = $db->prepare("SELECT COUNT(*) FROM {$table}" . ($alias ? " {$alias}" : '') . " WHERE " . farmFilter($alias));
+    $stmt->execute();
+    return (int)$stmt->fetchColumn();
+};
+$cow_count = $cnt('cows');
+$milk_count= $cnt('milk_records');
+$fin_count = $cnt('finance_transactions', 'ft');
+$br_count  = $cnt('breeding_records');
+$tr_count  = $cnt('treatments');
+
+// Sales scoped via cows JOIN
+$cs_stmt = $db->prepare("SELECT COUNT(*) FROM cow_sales cs JOIN cows c ON c.id=cs.cow_id WHERE " . farmFilter('c'));
+$cs_stmt->execute();
+$cs_count = (int)$cs_stmt->fetchColumn();
+
+$ms_stmt = $db->prepare("SELECT COUNT(*) FROM meat_sales ms JOIN cows c ON c.id=ms.cow_id WHERE " . farmFilter('c'));
+$ms_stmt->execute();
+$ms_count = (int)$ms_stmt->fetchColumn();
+
+$cs_stmt2 = $db->prepare("SELECT DISTINCT status FROM cows WHERE " . farmFilter() . " ORDER BY status");
+$cs_stmt2->execute();
+$cow_statuses = $cs_stmt2->fetchAll(PDO::FETCH_COLUMN);
+
 $worker_count = hasRole(['admin'])
-    ? (int)$db->query("SELECT COUNT(*) FROM workers")->fetchColumn()
+    ? (function() use ($db): int {
+        $s = $db->prepare("SELECT COUNT(*) FROM workers w JOIN users u ON u.id=w.user_id WHERE " . farmFilter('u'));
+        $s->execute();
+        return (int)$s->fetchColumn();
+    })()
     : 0;
 
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';

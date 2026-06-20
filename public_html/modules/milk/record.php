@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'worker', 'veterinarian']);
+requireFarmScope();
 requireModule('milk');
 
 $page_title = 'Record Milk';
@@ -35,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($form['cow_id'] <= 0) {
         $errors[] = 'Please select a cow.';
     } else {
-        $chk = $db->prepare("SELECT id FROM cows WHERE id = ? AND status NOT IN ('sold','deceased')");
+        $chk = $db->prepare("SELECT id FROM cows WHERE id = ? AND " . farmFilter() . " AND status NOT IN ('sold','deceased')");
         $chk->execute([$form['cow_id']]);
         if (!$chk->fetch()) $errors[] = 'Selected cow is invalid or no longer active.';
     }
@@ -65,9 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         $user_id = (int)$_SESSION['user_id'];
         $db->prepare(
-            "INSERT INTO milk_records (cow_id, liters, fat_percentage, contamination_flag, recorded_at, recorded_by)
-             VALUES (?,?,?,?,?,?)"
-        )->execute([$form['cow_id'], $liters, $fat, $form['contamination_flag'], $recorded_at, $user_id]);
+            "INSERT INTO milk_records (farm_id, cow_id, liters, fat_percentage, contamination_flag, recorded_at, recorded_by)
+             VALUES (?,?,?,?,?,?,?)"
+        )->execute([fid(), $form['cow_id'], $liters, $fat, $form['contamination_flag'], $recorded_at, $user_id]);
 
         $new_id = (int)$db->lastInsertId();
         auditLog($user_id, 'CREATE_MILK_RECORD', 'milk_records', $new_id, null, [
@@ -79,11 +81,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Load active cows for select
-$cows = $db->query(
+$cows = $db->prepare(
     "SELECT id, tag_number, breed, status FROM cows
-     WHERE status NOT IN ('sold','deceased')
+     WHERE " . farmFilter() . " AND status NOT IN ('sold','deceased')
      ORDER BY tag_number ASC"
-)->fetchAll();
+);
+$cows->execute();
+$cows = $cows->fetchAll();
 
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 ?>

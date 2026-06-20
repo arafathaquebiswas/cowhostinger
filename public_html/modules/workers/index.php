@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'reception']);
+requireFarmScope();
 requireModule('workers');
 
 $page_title = 'Workers';
@@ -19,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id   = (int)$_SESSION['user_id'];
 
     if ($action === 'toggle_status' && hasRole(['admin']) && $worker_id > 0) {
-        $sel = $db->prepare("SELECT w.id, w.status, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ?");
+        $sel = $db->prepare("SELECT w.id, w.status, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ? AND " . farmFilter('u'));
         $sel->execute([$worker_id]);
         $w = $sel->fetch();
         if ($w) {
@@ -31,11 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'delete' && hasRole(['admin']) && $worker_id > 0) {
-        $sel = $db->prepare("SELECT w.id, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ?");
+        $sel = $db->prepare("SELECT w.id, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ? AND " . farmFilter('u'));
         $sel->execute([$worker_id]);
         $w = $sel->fetch();
         if ($w) {
             try {
+                // $w already verified via farm-scoped SELECT above
                 $db->prepare("DELETE FROM workers WHERE id = ?")->execute([$worker_id]);
                 auditLog($user_id, 'DELETE_WORKER', 'workers', $worker_id, $w, null);
                 flashMessage('success', "Worker profile for {$w['name']} deleted.");
@@ -57,7 +60,7 @@ $per_page   = 20;
 $valid_statuses = ['active','inactive','terminated'];
 if (!in_array($filter_status, $valid_statuses, true)) $filter_status = '';
 
-$where  = ['1=1'];
+$where  = [farmFilter('u')];
 $params = [];
 if ($search !== '') {
     $where[]  = '(u.name LIKE ? OR u.email LIKE ?)';
@@ -95,17 +98,30 @@ $stmt->execute($fetch_params);
 $workers = $stmt->fetchAll();
 
 // Summary stats
-$stats = $db->query(
+$stats_stmt = $db->prepare(
     "SELECT
        COUNT(*) AS total,
        SUM(w.status = 'active') AS active,
        SUM(w.status = 'inactive') AS inactive,
        SUM(CASE WHEN w.status = 'active' THEN w.salary ELSE 0 END) AS monthly_salary,
-       (SELECT COUNT(*) FROM worker_tasks WHERE status IN ('pending','in_progress')) AS open_tasks,
-       (SELECT COUNT(*) FROM worker_tasks WHERE status = 'overdue') AS overdue,
-       (SELECT COUNT(*) FROM worker_tasks WHERE status = 'completed') AS completed_tasks
-     FROM workers w"
-)->fetch();
+       (SELECT COUNT(*) FROM worker_tasks wt2
+        JOIN workers w2 ON w2.id = wt2.worker_id
+        JOIN users u2 ON u2.id = w2.user_id
+        WHERE wt2.status IN ('pending','in_progress') AND " . farmFilter('u2') . ") AS open_tasks,
+       (SELECT COUNT(*) FROM worker_tasks wt2
+        JOIN workers w2 ON w2.id = wt2.worker_id
+        JOIN users u2 ON u2.id = w2.user_id
+        WHERE wt2.status = 'overdue' AND " . farmFilter('u2') . ") AS overdue,
+       (SELECT COUNT(*) FROM worker_tasks wt2
+        JOIN workers w2 ON w2.id = wt2.worker_id
+        JOIN users u2 ON u2.id = w2.user_id
+        WHERE wt2.status = 'completed' AND " . farmFilter('u2') . ") AS completed_tasks
+     FROM workers w
+     JOIN users u ON u.id = w.user_id
+     WHERE " . farmFilter('u')
+);
+$stats_stmt->execute();
+$stats = $stats_stmt->fetch();
 
 $qs = static fn(array $p): string =>
     '/modules/workers/index.php?' . http_build_query(array_filter($p, static fn($v) => $v !== '' && $v !== null));

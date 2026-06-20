@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('workers');
 
 $db      = getDB();
@@ -8,7 +10,7 @@ $user_id = (int)$_SESSION['user_id'];
 
 // Find worker profile for current user
 $my_worker_stmt = $db->prepare(
-    "SELECT w.id, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.user_id = ? LIMIT 1"
+    "SELECT w.id, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.user_id = ? AND " . farmFilter('u') . " LIMIT 1"
 );
 $my_worker_stmt->execute([$user_id]);
 $my_worker = $my_worker_stmt->fetch();
@@ -19,7 +21,7 @@ $viewing_own    = true;
 
 if (hasRole(['admin']) && $view_worker_id > 0) {
     $vw_stmt = $db->prepare(
-        "SELECT w.id, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ? LIMIT 1"
+        "SELECT w.id, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ? AND " . farmFilter('u') . " LIMIT 1"
     );
     $vw_stmt->execute([$view_worker_id]);
     $viewing_worker = $vw_stmt->fetch();

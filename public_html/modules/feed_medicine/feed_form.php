@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('feed_medicine');
 
 $db      = getDB();
@@ -20,7 +22,7 @@ $form = [
 ];
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM feed_inventory WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM feed_inventory WHERE id = ? AND " . farmFilter());
     $sel->execute([$item_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -76,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "UPDATE feed_inventory
                  SET item_name=?, quantity=?, unit=?, reorder_threshold=?,
                      purchase_price=?, supplier=?, purchase_date=?
-                 WHERE id=?"
+                 WHERE id=? AND " . farmFilter()
             )->execute([
                 $form['item_name'], $qty, $form['unit'], $threshold,
                 $purchase_price_val, $supplier_val, $pdate_val,
@@ -86,10 +88,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', "Feed item '{$form['item_name']}' updated.");
         } else {
             $db->prepare(
-                "INSERT INTO feed_inventory (item_name, quantity, unit, reorder_threshold, purchase_price, supplier, purchase_date)
-                 VALUES (?,?,?,?,?,?,?)"
+                "INSERT INTO feed_inventory (farm_id, item_name, quantity, unit, reorder_threshold, purchase_price, supplier, purchase_date)
+                 VALUES (?,?,?,?,?,?,?,?)"
             )->execute([
-                $form['item_name'], $qty, $form['unit'], $threshold,
+                fid(), $form['item_name'], $qty, $form['unit'], $threshold,
                 $purchase_price_val, $supplier_val, $pdate_val,
             ]);
             $new_id = (int)$db->lastInsertId();
@@ -99,9 +101,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $total_cost = $purchase_price_val * $qty;
                 $db->prepare(
                     "INSERT INTO finance_transactions
-                     (type, category, amount, related_module, reference_id, transaction_date, recorded_by, notes)
-                     VALUES ('expense', 'Feed Purchase', ?, 'feed_medicine', ?, ?, ?, ?)"
-                )->execute([
+                     (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, notes)
+                     VALUES (?, 'expense', 'Feed Purchase', ?, 'feed_medicine', ?, ?, ?, ?)"
+                )->execute([fid(),
                     $total_cost, $new_id,
                     $pdate_val ?? date('Y-m-d'),
                     $user_id,

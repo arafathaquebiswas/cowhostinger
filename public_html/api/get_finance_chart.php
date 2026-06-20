@@ -1,20 +1,23 @@
 <?php
 require_once dirname(__DIR__) . '/includes/role_guard.php';
+require_once dirname(__DIR__) . '/includes/farm_guard.php';
 startSecureSession();
 requireRole(['admin', 'accountant']);
 
 $db  = getDB();
 $raw = [];
 
-$stmt = $db->query(
+$stmt = $db->prepare(
     "SELECT DATE_FORMAT(transaction_date, '%Y-%m') AS m,
             SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END) AS income,
             SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS expense
      FROM finance_transactions
      WHERE transaction_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)
+       AND " . farmFilter() . "
      GROUP BY m
      ORDER BY m ASC"
 );
+$stmt->execute();
 foreach ($stmt->fetchAll() as $row) {
     $raw[$row['m']] = [
         'income'  => round((float)$row['income'],  2),

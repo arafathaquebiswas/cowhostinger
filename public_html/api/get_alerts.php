@@ -1,5 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/includes/role_guard.php';
+require_once dirname(__DIR__) . '/includes/farm_guard.php';
 startSecureSession();
 requireAuth();
 
@@ -8,7 +9,7 @@ $filter = $_GET['filter'] ?? 'unread';   // unread | all
 $severity = $_GET['severity'] ?? '';
 
 $db     = getDB();
-$where  = ['1=1'];
+$where  = [farmFilter()];
 $params = [];
 
 if ($filter === 'unread') {
@@ -31,7 +32,9 @@ $stmt = $db->prepare(
 $params[] = $limit;
 $stmt->execute($params);
 
-$unread_count = (int)$db->query("SELECT COUNT(*) FROM alerts WHERE is_read = 0")->fetchColumn();
+$uc_stmt = $db->prepare("SELECT COUNT(*) FROM alerts WHERE is_read = 0 AND " . farmFilter());
+$uc_stmt->execute();
+$unread_count = (int)$uc_stmt->fetchColumn();
 
 jsonResponse([
     'alerts'       => $stmt->fetchAll(),

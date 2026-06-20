@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('workers');
 
 $db         = getDB();
@@ -22,7 +24,7 @@ if ($is_edit) {
         "SELECT w.id, w.user_id, w.salary, w.hire_date, w.termination_date, w.status,
                 u.name, u.email, u.role
          FROM workers w JOIN users u ON u.id = w.user_id
-         WHERE w.id = ?"
+         WHERE w.id = ? AND " . farmFilter('u')
     );
     $sel->execute([$worker_id]);
     $worker_user = $sel->fetch();
@@ -42,13 +44,16 @@ if ($is_edit) {
 // Users available for new worker profiles (no existing worker profile)
 $available_users = [];
 if (!$is_edit) {
-    $available_users = $db->query(
+    $avail_stmt = $db->prepare(
         "SELECT u.id, u.name, u.email, u.role
          FROM users u
          WHERE u.status = 'active'
+           AND " . farmFilter('u') . "
            AND u.id NOT IN (SELECT user_id FROM workers)
          ORDER BY u.name ASC"
-    )->fetchAll();
+    );
+    $avail_stmt->execute();
+    $available_users = $avail_stmt->fetchAll();
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -88,9 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($form['user_id'] <= 0) {
             $errors[] = 'Please select a user.';
         } else {
-            $chk = $db->prepare("SELECT id FROM workers WHERE user_id = ?");
-            $chk->execute([$form['user_id']]);
-            if ($chk->fetch()) $errors[] = 'This user already has a worker profile.';
+            // Confirm user belongs to this farm
+            $ucheck = $db->prepare("SELECT id FROM users WHERE id = ? AND " . farmFilter());
+            $ucheck->execute([$form['user_id']]);
+            if (!$ucheck->fetch()) {
+                $errors[] = 'Invalid user selected.';
+            } else {
+                $chk = $db->prepare("SELECT id FROM workers WHERE user_id = ?");
+                $chk->execute([$form['user_id']]);
+                if ($chk->fetch()) $errors[] = 'This user already has a worker profile.';
+            }
         }
     }
 
@@ -108,9 +120,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', "Worker profile for {$worker_user['name']} updated.");
         } else {
             $ins = $db->prepare(
-                "INSERT INTO workers (user_id, salary, hire_date, termination_date, status) VALUES (?,?,?,?,?)"
+                "INSERT INTO workers (farm_id, user_id, salary, hire_date, termination_date, status) VALUES (?,?,?,?,?,?)"
             );
-            $ins->execute([$form['user_id'], $salary, $hire, $term, $form['status']]);
+            $ins->execute([fid(), $form['user_id'], $salary, $hire, $term, $form['status']]);
             $new_id = (int)$db->lastInsertId();
             auditLog($uid, 'CREATE_WORKER', 'workers', $new_id, null, $form);
 

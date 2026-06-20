@@ -1,5 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
+requireFarmScope();
 requireRole(['admin']);
 
 $page_title = 'User Management';
@@ -27,13 +29,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('error', 'You cannot deactivate your own account.');
             redirect('/modules/admin/users.php');
         }
-        $row = $db->prepare("SELECT status FROM users WHERE id = ?")->execute([$user_id])
-               ? $db->prepare("SELECT status FROM users WHERE id = ?") : null;
-        $stmt = $db->prepare("SELECT status FROM users WHERE id = ?");
+        $stmt = $db->prepare("SELECT status FROM users WHERE id = ? AND " . farmFilter());
         $stmt->execute([$user_id]);
         $current = $stmt->fetchColumn();
+        if ($current === false) {
+            flashMessage('error', 'User not found.');
+            redirect('/modules/admin/users.php');
+        }
         $new_status = ($current === 'active') ? 'inactive' : 'active';
-        $db->prepare("UPDATE users SET status = ? WHERE id = ?")->execute([$new_status, $user_id]);
+        $db->prepare("UPDATE users SET status = ? WHERE id = ? AND " . farmFilter())->execute([$new_status, $user_id]);
         auditLog((int)$_SESSION['user_id'], 'USER_STATUS_TOGGLE', 'users', $user_id, ['status' => $current], ['status' => $new_status]);
         flashMessage('success', 'User status updated to ' . $new_status . '.');
         redirect('/modules/admin/users.php');
@@ -45,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('error', 'You cannot delete your own account.');
             redirect('/modules/admin/users.php');
         }
-        $db->prepare("DELETE FROM users WHERE id = ?")->execute([$user_id]);
+        $db->prepare("DELETE FROM users WHERE id = ? AND " . farmFilter())->execute([$user_id]);
         auditLog((int)$_SESSION['user_id'], 'DELETE_USER', 'users', $user_id);
         flashMessage('success', 'User deleted.');
         redirect('/modules/admin/users.php');
@@ -88,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($errors)) {
             if ($action === 'add') {
                 $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-                $stmt = $db->prepare("INSERT INTO users (name, email, password_hash, role, status) VALUES (?,?,?,?,?)");
-                $stmt->execute([$name, $email, $hash, $role, $status]);
+                $stmt = $db->prepare("INSERT INTO users (farm_id, name, email, password_hash, role, status) VALUES (?,?,?,?,?,?)");
+                $stmt->execute([fid(), $name, $email, $hash, $role, $status]);
                 $new_id = (int)$db->lastInsertId();
                 auditLog((int)$_SESSION['user_id'], 'CREATE_USER', 'users', $new_id, null, ['name'=>$name,'email'=>$email,'role'=>$role]);
                 flashMessage('success', "User \"{$name}\" created successfully.");
@@ -98,10 +102,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Edit
                 if ($password !== '') {
                     $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-                    $stmt = $db->prepare("UPDATE users SET name=?, email=?, password_hash=?, role=?, status=? WHERE id=?");
+                    $stmt = $db->prepare("UPDATE users SET name=?, email=?, password_hash=?, role=?, status=? WHERE id=? AND " . farmFilter());
                     $stmt->execute([$name, $email, $hash, $role, $status, $user_id]);
                 } else {
-                    $stmt = $db->prepare("UPDATE users SET name=?, email=?, role=?, status=? WHERE id=?");
+                    $stmt = $db->prepare("UPDATE users SET name=?, email=?, role=?, status=? WHERE id=? AND " . farmFilter());
                     $stmt->execute([$name, $email, $role, $status, $user_id]);
                 }
                 auditLog((int)$_SESSION['user_id'], 'UPDATE_USER', 'users', $user_id);
@@ -117,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Load edit user if requested
 if ($_GET['edit'] ?? false) {
-    $stmt = $db->prepare("SELECT id, name, email, role, status FROM users WHERE id = ?");
+    $stmt = $db->prepare("SELECT id, name, email, role, status FROM users WHERE id = ? AND " . farmFilter());
     $stmt->execute([(int)$_GET['edit']]);
     $edit_user = $stmt->fetch() ?: null;
 }
@@ -127,7 +131,7 @@ $search   = sanitize($_GET['q']    ?? '');
 $page     = max(1, (int)($_GET['page'] ?? 1));
 $per_page = 20;
 
-$where  = ['1=1'];
+$where  = [farmFilter()];
 $params = [];
 if ($search !== '') {
     $where[]  = '(name LIKE ? OR email LIKE ?)';

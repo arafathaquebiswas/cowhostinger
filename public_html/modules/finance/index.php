@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('finance');
 
 $page_title = 'Finance';
@@ -16,11 +18,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($_POST['action'] === 'delete' && hasRole(['admin'])) {
         $del_id = (int)($_POST['txn_id'] ?? 0);
         if ($del_id > 0) {
-            $sel = $db->prepare("SELECT * FROM finance_transactions WHERE id = ?");
+            $sel = $db->prepare("SELECT * FROM finance_transactions WHERE id = ? AND " . farmFilter());
             $sel->execute([$del_id]);
             $txn = $sel->fetch();
             if ($txn) {
-                $db->prepare("DELETE FROM finance_transactions WHERE id = ?")->execute([$del_id]);
+                $db->prepare("DELETE FROM finance_transactions WHERE id = ? AND " . farmFilter())->execute([$del_id]);
                 auditLog((int)$_SESSION['user_id'], 'DELETE_FINANCE_TXN', 'finance_transactions', $del_id, $txn, null);
                 flashMessage('success', 'Transaction deleted.');
             }
@@ -42,7 +44,7 @@ $filter_cat   = trim($_GET['category']   ?? '');
 $page         = max(1, (int)($_GET['page'] ?? 1));
 $per_page     = 25;
 
-$where  = ['1=1'];
+$where  = [farmFilter('ft')];
 $params = [];
 if ($date_from !== '' && strtotime($date_from)) { $where[] = 'ft.transaction_date >= ?'; $params[] = $date_from; }
 if ($date_to   !== '' && strtotime($date_to))   { $where[] = 'ft.transaction_date <= ?'; $params[] = $date_to; }
@@ -51,52 +53,65 @@ if ($filter_cat  !== '') { $where[] = 'ft.category LIKE ?'; $params[] = "%{$filt
 $where_sql = implode(' AND ', $where);
 
 // Month summary (always current month regardless of filters)
-$month_row = $db->query(
+$month_row = $db->prepare(
     "SELECT
        COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END), 0) AS income,
        COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) AS expense
      FROM finance_transactions
-     WHERE MONTH(transaction_date) = MONTH(CURDATE())
+     WHERE " . farmFilter() . "
+       AND MONTH(transaction_date) = MONTH(CURDATE())
        AND YEAR(transaction_date)  = YEAR(CURDATE())"
-)->fetch();
+);
+$month_row->execute();
+$month_row = $month_row->fetch();
 
-$alltime_row = $db->query(
+$alltime_row = $db->prepare(
     "SELECT
        COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END), 0) AS income,
        COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) AS expense
-     FROM finance_transactions"
-)->fetch();
+     FROM finance_transactions
+     WHERE " . farmFilter()
+);
+$alltime_row->execute();
+$alltime_row = $alltime_row->fetch();
 
 $month_net   = (float)$month_row['income']   - (float)$month_row['expense'];
 $alltime_net = (float)$alltime_row['income'] - (float)$alltime_row['expense'];
 
 // Previous month summary
-$prev_month_row = $db->query(
+$prev_month_row = $db->prepare(
     "SELECT
        COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END), 0) AS income,
        COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) AS expense
      FROM finance_transactions
-     WHERE MONTH(transaction_date) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+     WHERE " . farmFilter() . "
+       AND MONTH(transaction_date) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
        AND YEAR(transaction_date)  = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))"
-)->fetch();
+);
+$prev_month_row->execute();
+$prev_month_row = $prev_month_row->fetch();
 $prev_month_net = (float)$prev_month_row['income'] - (float)$prev_month_row['expense'];
 
 // Category breakdowns for charts (current month)
-$expense_cats_raw = $db->query(
+$expense_cats_raw = $db->prepare(
     "SELECT category, COALESCE(SUM(amount),0) AS total
      FROM finance_transactions
-     WHERE type='expense'
+     WHERE " . farmFilter() . " AND type='expense'
        AND MONTH(transaction_date)=MONTH(CURDATE()) AND YEAR(transaction_date)=YEAR(CURDATE())
      GROUP BY category ORDER BY total DESC LIMIT 8"
-)->fetchAll();
+);
+$expense_cats_raw->execute();
+$expense_cats_raw = $expense_cats_raw->fetchAll();
 
-$income_cats_raw = $db->query(
+$income_cats_raw = $db->prepare(
     "SELECT category, COALESCE(SUM(amount),0) AS total
      FROM finance_transactions
-     WHERE type='income'
+     WHERE " . farmFilter() . " AND type='income'
        AND MONTH(transaction_date)=MONTH(CURDATE()) AND YEAR(transaction_date)=YEAR(CURDATE())
      GROUP BY category ORDER BY total DESC LIMIT 8"
-)->fetchAll();
+);
+$income_cats_raw->execute();
+$income_cats_raw = $income_cats_raw->fetchAll();
 
 // Count
 $count_stmt = $db->prepare("SELECT COUNT(*) FROM finance_transactions ft WHERE {$where_sql}");
@@ -120,7 +135,9 @@ $stmt->execute($fetch_params);
 $transactions = $stmt->fetchAll();
 
 // Distinct categories for filter datalist
-$cats = $db->query("SELECT DISTINCT category FROM finance_transactions ORDER BY category ASC")->fetchAll(PDO::FETCH_COLUMN);
+$cats_stmt = $db->prepare("SELECT DISTINCT category FROM finance_transactions WHERE " . farmFilter() . " ORDER BY category ASC");
+$cats_stmt->execute();
+$cats = $cats_stmt->fetchAll(PDO::FETCH_COLUMN);
 
 $qs = static fn(array $p): string =>
     '/modules/finance/index.php?' . http_build_query(array_filter($p, static fn($v) => $v !== '' && $v !== null));

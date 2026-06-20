@@ -1,13 +1,15 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('equipment');
 
 $db    = getDB();
 $eq_id = (int)($_GET['id'] ?? 0);
 if ($eq_id <= 0) { redirect('/modules/equipment/index.php'); }
 
-$sel = $db->prepare("SELECT * FROM equipment WHERE id = ?");
+$sel = $db->prepare("SELECT * FROM equipment WHERE id = ? AND " . farmFilter());
 $sel->execute([$eq_id]);
 $equipment = $sel->fetch();
 
@@ -51,9 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $db->beginTransaction();
         try {
             $db->prepare(
-                "INSERT INTO equipment_sales (equipment_id, sale_price, buyer_name, sale_date, profit_loss, recorded_by, notes)
-                 VALUES (?,?,?,?,?,?,?)"
-            )->execute([
+                "INSERT INTO equipment_sales (farm_id, equipment_id, sale_price, buyer_name, sale_date, profit_loss, recorded_by, notes)
+                 VALUES (?,?,?,?,?,?,?,?)"
+            )->execute([fid(),
                 $eq_id, $sale_price,
                 $form['buyer_name'] ?: null,
                 $form['sale_date'],
@@ -63,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $sale_id = (int)$db->lastInsertId();
 
-            $db->prepare("UPDATE equipment SET status='sold', current_value=? WHERE id=?")
+            $db->prepare("UPDATE equipment SET status='sold', current_value=? WHERE id=? AND " . farmFilter())
                ->execute([$sale_price, $eq_id]);
 
             $pl_note = $profit_loss >= 0
@@ -71,10 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : 'loss: '   . number_format(abs($profit_loss), 2);
             $db->prepare(
                 "INSERT INTO finance_transactions
-                 (type, category, amount, related_module, reference_id, transaction_date, recorded_by, notes)
-                 VALUES ('income', 'Equipment Sale', ?, 'equipment', ?, ?, ?, ?)"
+                 (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, notes)
+                 VALUES (?, 'income', 'Equipment Sale', ?, 'equipment', ?, ?, ?, ?)"
             )->execute([
-                $sale_price, $eq_id, $form['sale_date'], $user_id,
+                fid(), $sale_price, $eq_id, $form['sale_date'], $user_id,
                 "Equipment sold: {$equipment['name']}" .
                 ($form['buyer_name'] ? " to {$form['buyer_name']}" : '') .
                 " ({$pl_note})",

@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('feed_medicine');
 
 $page_title = 'Feed & Medicine';
@@ -25,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $delta   = (float)($_POST['qty_delta'] ?? 0);
 
         if ($item_id > 0 && $delta != 0) {
-            $sel = $db->prepare("SELECT id, item_name, quantity FROM feed_inventory WHERE id = ?");
+            $sel = $db->prepare("SELECT id, item_name, quantity FROM feed_inventory WHERE id = ? AND " . farmFilter());
             $sel->execute([$item_id]);
             $item = $sel->fetch();
             if ($item) {
@@ -33,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($new_qty < 0) {
                     flashMessage('error', "Cannot reduce stock below 0. Current: {$item['quantity']}");
                 } else {
-                    $db->prepare("UPDATE feed_inventory SET quantity = ? WHERE id = ?")->execute([$new_qty, $item_id]);
+                    $db->prepare("UPDATE feed_inventory SET quantity = ? WHERE id = ? AND " . farmFilter())->execute([$new_qty, $item_id]);
                     auditLog($user_id, 'ADJUST_FEED_STOCK', 'feed_inventory', $item_id,
                         ['quantity' => $item['quantity']], ['quantity' => $new_qty, 'delta' => $delta]);
                     $sign = $delta > 0 ? '+' : '';
@@ -50,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $delta   = (float)($_POST['qty_delta'] ?? 0);
 
         if ($item_id > 0 && $delta != 0) {
-            $sel = $db->prepare("SELECT id, item_name, quantity FROM medicine_inventory WHERE id = ?");
+            $sel = $db->prepare("SELECT id, item_name, quantity FROM medicine_inventory WHERE id = ? AND " . farmFilter());
             $sel->execute([$item_id]);
             $item = $sel->fetch();
             if ($item) {
@@ -58,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($new_qty < 0) {
                     flashMessage('error', "Cannot reduce stock below 0. Current: {$item['quantity']}");
                 } else {
-                    $db->prepare("UPDATE medicine_inventory SET quantity = ? WHERE id = ?")->execute([$new_qty, $item_id]);
+                    $db->prepare("UPDATE medicine_inventory SET quantity = ? WHERE id = ? AND " . farmFilter())->execute([$new_qty, $item_id]);
                     auditLog($user_id, 'ADJUST_MEDICINE_STOCK', 'medicine_inventory', $item_id,
                         ['quantity' => $item['quantity']], ['quantity' => $new_qty, 'delta' => $delta]);
                     $sign = $delta > 0 ? '+' : '';
@@ -73,11 +75,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_feed' && hasRole(['admin'])) {
         $item_id = (int)($_POST['item_id'] ?? 0);
         if ($item_id > 0) {
-            $sel = $db->prepare("SELECT id, item_name FROM feed_inventory WHERE id = ?");
+            $sel = $db->prepare("SELECT id, item_name FROM feed_inventory WHERE id = ? AND " . farmFilter());
             $sel->execute([$item_id]);
             $item = $sel->fetch();
             if ($item) {
-                $db->prepare("DELETE FROM feed_inventory WHERE id = ?")->execute([$item_id]);
+                $db->prepare("DELETE FROM feed_inventory WHERE id = ? AND " . farmFilter())->execute([$item_id]);
                 auditLog($user_id, 'DELETE_FEED_ITEM', 'feed_inventory', $item_id, $item, null);
                 flashMessage('success', "Feed item '{$item['item_name']}' deleted.");
             }
@@ -89,12 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_medicine' && hasRole(['admin'])) {
         $item_id = (int)($_POST['item_id'] ?? 0);
         if ($item_id > 0) {
-            $sel = $db->prepare("SELECT id, item_name FROM medicine_inventory WHERE id = ?");
+            $sel = $db->prepare("SELECT id, item_name FROM medicine_inventory WHERE id = ? AND " . farmFilter());
             $sel->execute([$item_id]);
             $item = $sel->fetch();
             if ($item) {
                 try {
-                    $db->prepare("DELETE FROM medicine_inventory WHERE id = ?")->execute([$item_id]);
+                    $db->prepare("DELETE FROM medicine_inventory WHERE id = ? AND " . farmFilter())->execute([$item_id]);
                     auditLog($user_id, 'DELETE_MEDICINE_ITEM', 'medicine_inventory', $item_id, $item, null);
                     flashMessage('success', "Medicine '{$item['item_name']}' deleted.");
                 } catch (PDOException $e) {
@@ -110,24 +112,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ── Load data ─────────────────────────────────────────────────────
 
-$feed_items = $db->query(
+$feed_items_stmt = $db->prepare(
     "SELECT id, item_name, quantity, unit, purchase_price, supplier, purchase_date, reorder_threshold, last_updated
-     FROM feed_inventory ORDER BY item_name ASC"
-)->fetchAll();
+     FROM feed_inventory WHERE " . farmFilter() . " ORDER BY item_name ASC"
+);
+$feed_items_stmt->execute();
+$feed_items = $feed_items_stmt->fetchAll();
 
 // Monthly feed purchase cost from finance_transactions
-$feed_cost_month = (float)$db->query(
+$feed_cost_stmt = $db->prepare(
     "SELECT COALESCE(SUM(amount), 0) FROM finance_transactions
-     WHERE category = 'Feed Purchase'
+     WHERE " . farmFilter() . " AND category = 'Feed Purchase'
        AND MONTH(transaction_date) = MONTH(CURDATE())
        AND YEAR(transaction_date)  = YEAR(CURDATE())"
-)->fetchColumn();
+);
+$feed_cost_stmt->execute();
+$feed_cost_month = (float)$feed_cost_stmt->fetchColumn();
 
-$medicine_items = $db->query(
+$medicine_items_stmt = $db->prepare(
     "SELECT id, item_name, quantity, unit, expiry_date, reorder_threshold, last_updated,
             DATEDIFF(expiry_date, CURDATE()) AS days_to_expiry
-     FROM medicine_inventory ORDER BY item_name ASC"
-)->fetchAll();
+     FROM medicine_inventory WHERE " . farmFilter() . " ORDER BY item_name ASC"
+);
+$medicine_items_stmt->execute();
+$medicine_items = $medicine_items_stmt->fetchAll();
 
 // KPI counts
 $low_feed     = count(array_filter($feed_items, fn($r) => (float)$r['quantity'] <= (float)$r['reorder_threshold'] && (float)$r['reorder_threshold'] > 0));

@@ -1,6 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
-requireAuth();
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
+requireFarmScope();
 // Redirect to the dedicated treatments module
 $qs = isset($_GET['cow_id']) ? '?cow_id=' . (int)$_GET['cow_id'] : '';
 redirect('/modules/treatments/form.php' . $qs);
@@ -18,12 +19,16 @@ $form = [
     'notes'          => '',
 ];
 
-$cows = $db->query(
-    "SELECT id, tag_number, breed FROM cows WHERE status NOT IN ('sold','deceased') ORDER BY tag_number ASC"
-)->fetchAll();
-$medicines = $db->query(
-    "SELECT id, item_name, quantity, unit FROM medicine_inventory ORDER BY item_name ASC"
-)->fetchAll();
+$cows_stmt = $db->prepare(
+    "SELECT id, tag_number, breed FROM cows WHERE " . farmFilter() . " AND status NOT IN ('sold','deceased') ORDER BY tag_number ASC"
+);
+$cows_stmt->execute();
+$cows = $cows_stmt->fetchAll();
+$medicines_stmt = $db->prepare(
+    "SELECT id, item_name, quantity, unit FROM medicine_inventory WHERE " . farmFilter() . " ORDER BY item_name ASC"
+);
+$medicines_stmt->execute();
+$medicines = $medicines_stmt->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
@@ -48,14 +53,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $cow = null;
     if (empty($errors)) {
-        $stmt = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ? AND status NOT IN ('sold','deceased')");
+        $stmt = $db->prepare("SELECT id, tag_number FROM cows WHERE id = ? AND " . farmFilter() . " AND status NOT IN ('sold','deceased')");
         $stmt->execute([$cow_id]);
         $cow = $stmt->fetch();
         if (!$cow) $errors[] = 'Selected cow is not available.';
     }
 
     if ($medicine_id !== null) {
-        $stmt = $db->prepare("SELECT id FROM medicine_inventory WHERE id = ?");
+        $stmt = $db->prepare("SELECT id FROM medicine_inventory WHERE id = ? AND " . farmFilter());
         $stmt->execute([$medicine_id]);
         if (!$stmt->fetch()) $errors[] = 'Selected medicine is invalid.';
     }
@@ -76,16 +81,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dosage = $form['dosage'] !== '' ? $form['dosage'] : null;
 
         $db->prepare(
-            "INSERT INTO treatments (cow_id, medicine_id, administered_by, dosage, cost, treatment_date, notes, photo_url)
-             VALUES (?,?,?,?,?,?,?,?)"
-        )->execute([$cow_id, $medicine_id, $user_id, $dosage, $cost, $form['treatment_date'], $notes, $photo_url]);
+            "INSERT INTO treatments (farm_id, cow_id, medicine_id, administered_by, dosage, cost, treatment_date, notes, photo_url)
+             VALUES (?,?,?,?,?,?,?,?,?)"
+        )->execute([fid(), $cow_id, $medicine_id, $user_id, $dosage, $cost, $form['treatment_date'], $notes, $photo_url]);
         $new_id = (int)$db->lastInsertId();
 
         if ($cost !== null && $cost > 0) {
             $db->prepare(
-                "INSERT INTO finance_transactions (type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
-                 VALUES ('expense', 'Treatment', ?, 'treatments', ?, ?, ?, ?, ?)"
-            )->execute([$cost, $new_id, $form['treatment_date'], $user_id, $user_id, "Treatment cost for Cow #{$cow['tag_number']}"]);
+                "INSERT INTO finance_transactions (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
+                 VALUES (?, 'expense', 'Treatment', ?, 'treatments', ?, ?, ?, ?, ?)"
+            )->execute([fid(), $cost, $new_id, $form['treatment_date'], $user_id, $user_id, "Treatment cost for Cow #{$cow['tag_number']}"]);
         }
 
         auditLog($user_id, 'CREATE_TREATMENT', 'treatments', $new_id, null, $form);

@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('equipment');
 
 $page_title = 'Equipment';
@@ -22,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new_status = sanitize($_POST['new_status'] ?? '');
         $valid      = ['operational', 'maintenance', 'damaged', 'disposed'];
         if (in_array($new_status, $valid, true)) {
-            $sel = $db->prepare("SELECT id, name, status FROM equipment WHERE id = ?");
+            $sel = $db->prepare("SELECT id, name, status FROM equipment WHERE id = ? AND " . farmFilter());
             $sel->execute([$eq_id]);
             $eq = $sel->fetch();
             if ($eq) {
@@ -30,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($new_status === 'operational') {
                     $extra = [', last_maintenance_date = CURDATE()'];
                 }
-                $sql = "UPDATE equipment SET status = ?" . ($extra ? $extra[0] : '') . " WHERE id = ?";
+                $sql = "UPDATE equipment SET status = ?" . ($extra ? $extra[0] : '') . " WHERE id = ? AND " . farmFilter();
                 $db->prepare($sql)->execute([$new_status, $eq_id]);
                 auditLog($user_id, 'UPDATE_EQUIPMENT_STATUS', 'equipment', $eq_id,
                     ['status' => $eq['status']], ['status' => $new_status]);
@@ -41,12 +43,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'delete' && hasRole(['admin']) && $eq_id > 0) {
-        $sel = $db->prepare("SELECT id, name FROM equipment WHERE id = ?");
+        $sel = $db->prepare("SELECT id, name FROM equipment WHERE id = ? AND " . farmFilter());
         $sel->execute([$eq_id]);
         $eq = $sel->fetch();
         if ($eq) {
             try {
-                $db->prepare("DELETE FROM equipment WHERE id = ?")->execute([$eq_id]);
+                $db->prepare("DELETE FROM equipment WHERE id = ? AND " . farmFilter())->execute([$eq_id]);
                 auditLog($user_id, 'DELETE_EQUIPMENT', 'equipment', $eq_id, $eq, null);
                 flashMessage('success', "Equipment '{$eq['name']}' deleted.");
             } catch (PDOException $e) {
@@ -68,7 +70,7 @@ $per_page      = 20;
 $valid_statuses = ['operational', 'maintenance', 'damaged', 'sold', 'disposed'];
 if (!in_array($filter_status, $valid_statuses, true)) $filter_status = '';
 
-$where  = ['1=1'];
+$where  = [farmFilter()];
 $params = [];
 if ($filter_status !== '') {
     $where[]  = 'status = ?';
@@ -97,10 +99,14 @@ $stmt->execute($fetch_params);
 $equipment = $stmt->fetchAll();
 
 // Status counts
-$sc_rows = $db->query("SELECT status, COUNT(*) AS cnt FROM equipment GROUP BY status")->fetchAll();
+$sc_stmt = $db->prepare("SELECT status, COUNT(*) AS cnt FROM equipment WHERE " . farmFilter() . " GROUP BY status");
+$sc_stmt->execute();
+$sc_rows = $sc_stmt->fetchAll();
 $status_counts = [];
 foreach ($sc_rows as $r) $status_counts[$r['status']] = (int)$r['cnt'];
-$total_all = (int)$db->query("SELECT COUNT(*) FROM equipment")->fetchColumn();
+$total_all_stmt = $db->prepare("SELECT COUNT(*) FROM equipment WHERE " . farmFilter());
+$total_all_stmt->execute();
+$total_all = (int)$total_all_stmt->fetchColumn();
 
 function equipment_status_badge(string $s): string {
     return match($s) {

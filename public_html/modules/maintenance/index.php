@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireAuth();
+requireFarmScope();
 requireModule('maintenance');
 
 $page_title = 'Maintenance';
@@ -23,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'complete_log') {
         $log_id = (int)($_POST['log_id'] ?? 0);
         if ($log_id > 0) {
-            $sel = $db->prepare("SELECT * FROM maintenance_logs WHERE id = ? AND completed_date IS NULL");
+            $sel = $db->prepare("SELECT * FROM maintenance_logs WHERE id = ? AND completed_date IS NULL AND " . farmFilter());
             $sel->execute([$log_id]);
             $log = $sel->fetch();
             if ($log) {
@@ -38,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_log') {
         $log_id = (int)($_POST['log_id'] ?? 0);
         if ($log_id > 0) {
-            $sel = $db->prepare("SELECT * FROM maintenance_logs WHERE id = ?");
+            $sel = $db->prepare("SELECT * FROM maintenance_logs WHERE id = ? AND " . farmFilter());
             $sel->execute([$log_id]);
             $log = $sel->fetch();
             if ($log) {
@@ -53,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_area') {
         $area_id = (int)($_POST['area_id'] ?? 0);
         if ($area_id > 0) {
-            $sel = $db->prepare("SELECT id, name FROM farm_areas WHERE id = ?");
+            $sel = $db->prepare("SELECT id, name FROM farm_areas WHERE id = ? AND " . farmFilter());
             $sel->execute([$area_id]);
             $area = $sel->fetch();
             if ($area) {
@@ -72,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_purchase') {
         $purchase_id = (int)($_POST['purchase_id'] ?? 0);
         if ($purchase_id > 0) {
-            $sel = $db->prepare("SELECT * FROM area_purchases WHERE id = ?");
+            $sel = $db->prepare("SELECT ap.* FROM area_purchases ap JOIN farm_areas fa ON fa.id=ap.area_id WHERE ap.id = ? AND " . farmFilter('fa'));
             $sel->execute([$purchase_id]);
             $purchase = $sel->fetch();
             if ($purchase) {
@@ -96,7 +98,7 @@ $filter_area   = (int)($_GET['area_id']      ?? 0);
 $page_log      = max(1, (int)($_GET['page_log'] ?? 1));
 $per_page      = 20;
 
-$log_where  = ['1=1'];
+$log_where  = [farmFilter('ml')];
 $log_params = [];
 if ($filter_status === 'pending')   { $log_where[] = 'ml.completed_date IS NULL'; }
 if ($filter_status === 'completed') { $log_where[] = 'ml.completed_date IS NOT NULL'; }
@@ -124,28 +126,39 @@ $log_stmt->execute(array_merge($log_params, [$per_page, $pager_log['offset']]));
 $logs = $log_stmt->fetchAll();
 
 // Log KPIs
-$log_kpi = $db->query(
+$log_kpi_stmt = $db->prepare(
     "SELECT
        COUNT(*) AS total,
        SUM(completed_date IS NULL) AS pending_cnt,
        COALESCE(SUM(CASE WHEN MONTH(COALESCE(completed_date,scheduled_date,created_at))=MONTH(CURDATE()) AND YEAR(COALESCE(completed_date,scheduled_date,created_at))=YEAR(CURDATE()) THEN cost ELSE 0 END),0) AS month_cost,
        COALESCE(SUM(cost),0) AS total_cost
-     FROM maintenance_logs"
-)->fetch();
+     FROM maintenance_logs
+     WHERE " . farmFilter()
+);
+$log_kpi_stmt->execute();
+$log_kpi = $log_kpi_stmt->fetch();
 
 // Dropdowns for filters
-$equipment_list = $db->query("SELECT id, name FROM equipment ORDER BY name ASC")->fetchAll();
-$area_list      = $db->query("SELECT id, name FROM farm_areas ORDER BY name ASC")->fetchAll();
+$eq_list_stmt = $db->prepare("SELECT id, name FROM equipment WHERE " . farmFilter() . " ORDER BY name ASC");
+$eq_list_stmt->execute();
+$equipment_list = $eq_list_stmt->fetchAll();
+
+$area_list_stmt = $db->prepare("SELECT id, name FROM farm_areas WHERE " . farmFilter() . " ORDER BY name ASC");
+$area_list_stmt->execute();
+$area_list = $area_list_stmt->fetchAll();
 
 // ---- Farm Areas ----
 $page_area  = max(1, (int)($_GET['page_area'] ?? 1));
-$area_count = (int)$db->query("SELECT COUNT(*) FROM farm_areas")->fetchColumn();
+$area_cnt_stmt = $db->prepare("SELECT COUNT(*) FROM farm_areas WHERE " . farmFilter());
+$area_cnt_stmt->execute();
+$area_count = (int)$area_cnt_stmt->fetchColumn();
 $pager_area = paginate($area_count, $per_page, $page_area);
 $area_stmt  = $db->prepare(
     "SELECT fa.id, fa.name, fa.type, fa.capacity, fa.notes,
             (SELECT COUNT(*) FROM maintenance_logs ml WHERE ml.area_id = fa.id) AS log_count,
             (SELECT COUNT(*) FROM area_purchases ap WHERE ap.area_id = fa.id)   AS purchase_count
      FROM farm_areas fa
+     WHERE " . farmFilter('fa') . "
      ORDER BY fa.name ASC
      LIMIT ? OFFSET ?"
 );
@@ -161,17 +174,17 @@ $area_type_labels = [
 $filter_area_p = (int)($_GET['area_purchase_area_id'] ?? 0);
 $page_purch    = max(1, (int)($_GET['page_purch'] ?? 1));
 
-$purch_where  = ['1=1'];
+$purch_where  = [farmFilter('fa')];
 $purch_params = [];
 if ($filter_area_p > 0) { $purch_where[] = 'ap.area_id = ?'; $purch_params[] = $filter_area_p; }
 $purch_where_sql = implode(' AND ', $purch_where);
 
-$purch_count = $db->prepare("SELECT COUNT(*) FROM area_purchases ap WHERE {$purch_where_sql}");
+$purch_count = $db->prepare("SELECT COUNT(*) FROM area_purchases ap JOIN farm_areas fa ON fa.id=ap.area_id WHERE {$purch_where_sql}");
 $purch_count->execute($purch_params);
 $purch_total = (int)$purch_count->fetchColumn();
 $pager_purch = paginate($purch_total, $per_page, $page_purch);
 
-$purch_totals = $db->prepare("SELECT COALESCE(SUM(cost),0) AS total FROM area_purchases ap WHERE {$purch_where_sql}");
+$purch_totals = $db->prepare("SELECT COALESCE(SUM(ap.cost),0) AS total FROM area_purchases ap JOIN farm_areas fa ON fa.id=ap.area_id WHERE {$purch_where_sql}");
 $purch_totals->execute($purch_params);
 $purch_total_cost = (float)$purch_totals->fetchColumn();
 

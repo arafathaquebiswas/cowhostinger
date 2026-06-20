@@ -1,17 +1,20 @@
 <?php
 require_once dirname(__DIR__) . '/includes/role_guard.php';
+require_once dirname(__DIR__) . '/includes/farm_guard.php';
 startSecureSession();
 requireAuth();
 
 $db  = getDB();
 $raw = [];
 
-$stmt = $db->query(
+$stmt = $db->prepare(
     "SELECT DATE(recorded_at) AS d, SUM(liters) AS total
      FROM milk_records
      WHERE recorded_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+       AND " . farmFilter() . "
      GROUP BY DATE(recorded_at)"
 );
+$stmt->execute();
 foreach ($stmt->fetchAll() as $row) {
     $raw[$row['d']] = round((float)$row['total'], 1);
 }

@@ -1,5 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
+requireFarmScope();
 requireRole(['admin']);
 
 $page_title = 'Audit Log';

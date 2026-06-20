@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('feed_medicine');
 
 $db      = getDB();
@@ -18,7 +20,7 @@ $form = [
 ];
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM medicine_inventory WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM medicine_inventory WHERE id = ? AND " . farmFilter());
     $sel->execute([$item_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -63,14 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user_id = (int)$_SESSION['user_id'];
         if ($is_edit) {
             $db->prepare(
-                "UPDATE medicine_inventory SET item_name=?, quantity=?, unit=?, expiry_date=?, reorder_threshold=? WHERE id=?"
+                "UPDATE medicine_inventory SET item_name=?, quantity=?, unit=?, expiry_date=?, reorder_threshold=? WHERE id=? AND " . farmFilter()
             )->execute([$form['item_name'], $qty, $form['unit'], $expiry, $threshold, $item_id]);
             auditLog($user_id, 'UPDATE_MEDICINE_ITEM', 'medicine_inventory', $item_id, $existing, $form);
             flashMessage('success', "Medicine '{$form['item_name']}' updated.");
         } else {
             $db->prepare(
-                "INSERT INTO medicine_inventory (item_name, quantity, unit, expiry_date, reorder_threshold) VALUES (?,?,?,?,?)"
-            )->execute([$form['item_name'], $qty, $form['unit'], $expiry, $threshold]);
+                "INSERT INTO medicine_inventory (farm_id, item_name, quantity, unit, expiry_date, reorder_threshold) VALUES (?,?,?,?,?,?)"
+            )->execute([fid(), $form['item_name'], $qty, $form['unit'], $expiry, $threshold]);
             $new_id = (int)$db->lastInsertId();
             auditLog($user_id, 'CREATE_MEDICINE_ITEM', 'medicine_inventory', $new_id, null, $form);
             flashMessage('success', "Medicine '{$form['item_name']}' added.");

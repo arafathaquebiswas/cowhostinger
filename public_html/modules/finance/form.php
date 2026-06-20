@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('finance');
 
 $db     = getDB();
@@ -18,7 +20,7 @@ $form = [
 ];
 
 if ($is_edit) {
-    $sel = $db->prepare("SELECT * FROM finance_transactions WHERE id = ?");
+    $sel = $db->prepare("SELECT * FROM finance_transactions WHERE id = ? AND " . farmFilter());
     $sel->execute([$txn_id]);
     $existing = $sel->fetch();
     if (!$existing) {
@@ -72,15 +74,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($is_edit) {
             $db->prepare(
-                "UPDATE finance_transactions SET type=?, category=?, amount=?, transaction_date=?, notes=? WHERE id=?"
+                "UPDATE finance_transactions SET type=?, category=?, amount=?, transaction_date=?, notes=? WHERE id=? AND " . farmFilter()
             )->execute([$form['type'], $form['category'], $amount, $form['transaction_date'], $notes_val, $txn_id]);
             auditLog($user_id, 'UPDATE_FINANCE_TXN', 'finance_transactions', $txn_id, $existing, $form);
             flashMessage('success', 'Transaction updated.');
         } else {
             $db->prepare(
-                "INSERT INTO finance_transactions (type, category, amount, transaction_date, recorded_by, approved_by, notes)
-                 VALUES (?,?,?,?,?,?,?)"
-            )->execute([$form['type'], $form['category'], $amount, $form['transaction_date'], $user_id, $user_id, $notes_val]);
+                "INSERT INTO finance_transactions (farm_id, type, category, amount, transaction_date, recorded_by, approved_by, notes)
+                 VALUES (?,?,?,?,?,?,?,?)"
+            )->execute([fid(), $form['type'], $form['category'], $amount, $form['transaction_date'], $user_id, $user_id, $notes_val]);
             $new_id = (int)$db->lastInsertId();
             auditLog($user_id, 'CREATE_FINANCE_TXN', 'finance_transactions', $new_id, null, $form);
             flashMessage('success', 'Transaction recorded.');

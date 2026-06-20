@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('sales');
 
 $db = getDB();
@@ -16,12 +18,14 @@ $form = [
 ];
 
 // All cows except already fully sold ones (sold-for-live-animal), allow deceased too
-$cows = $db->query(
+$cows_stmt = $db->prepare(
     "SELECT id, tag_number, breed, status
      FROM cows
-     WHERE status NOT IN ('sold')
+     WHERE status NOT IN ('sold') AND " . farmFilter() . "
      ORDER BY tag_number ASC"
-)->fetchAll();
+);
+$cows_stmt->execute();
+$cows = $cows_stmt->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
@@ -58,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Verify cow exists (excluding sold ones)
     $cow = null;
     if (empty($errors)) {
-        $sel = $db->prepare("SELECT id, tag_number, breed FROM cows WHERE id = ? AND status != 'sold'");
+        $sel = $db->prepare("SELECT id, tag_number, breed FROM cows WHERE id = ? AND status != 'sold' AND " . farmFilter());
         $sel->execute([$cow_id]);
         $cow = $sel->fetch();
         if (!$cow) $errors[] = 'Selected cow was not found or is already sold.';
@@ -73,9 +77,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             // Insert meat sale
             $db->prepare(
-                "INSERT INTO meat_sales (cow_id, kg_sold, price_per_kg, total_revenue, event_type, sale_date, notes)
-                 VALUES (?,?,?,?,?,?,?)"
-            )->execute([$cow_id, $kg_sold, $price_per_kg, $total_revenue, $form['event_type'], $form['sale_date'], $notes_val]);
+                "INSERT INTO meat_sales (farm_id, cow_id, kg_sold, price_per_kg, total_revenue, event_type, sale_date, notes)
+                 VALUES (?,?,?,?,?,?,?,?)"
+            )->execute([fid(), $cow_id, $kg_sold, $price_per_kg, $total_revenue, $form['event_type'], $form['sale_date'], $notes_val]);
             $sale_id = (int)$db->lastInsertId();
 
             // Auto-create finance transaction
@@ -86,9 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             };
             $finance_notes = "Meat sale — Cow #{$cow['tag_number']}, {$kg_sold} kg ({$event_label})";
             $db->prepare(
-                "INSERT INTO finance_transactions (type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
-                 VALUES ('income','Meat Sales',?,?,?,?,?,?,?)"
-            )->execute([$total_revenue, 'meat_sales', $sale_id, $form['sale_date'], $user_id, $user_id, $finance_notes]);
+                "INSERT INTO finance_transactions (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
+                 VALUES (?, 'income','Meat Sales',?,?,?,?,?,?,?)"
+            )->execute([fid(), $total_revenue, 'meat_sales', $sale_id, $form['sale_date'], $user_id, $user_id, $finance_notes]);
 
             auditLog($user_id, 'CREATE_MEAT_SALE', 'meat_sales', $sale_id, null, [
                 'cow_id'        => $cow_id,

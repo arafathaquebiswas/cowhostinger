@@ -1,13 +1,15 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin']);
+requireFarmScope();
 requireModule('equipment');
 
 $db    = getDB();
 $eq_id = (int)($_GET['id'] ?? 0);
 if ($eq_id <= 0) { redirect('/modules/equipment/index.php'); }
 
-$sel = $db->prepare("SELECT id, name, status FROM equipment WHERE id = ?");
+$sel = $db->prepare("SELECT id, name, status FROM equipment WHERE id = ? AND " . farmFilter());
 $sel->execute([$eq_id]);
 $equipment = $sel->fetch();
 if (!$equipment) {
@@ -47,16 +49,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $db->prepare(
             "INSERT INTO finance_transactions
-             (type, category, amount, related_module, reference_id, transaction_date, recorded_by, notes)
-             VALUES ('expense', ?, ?, 'equipment', ?, ?, ?, ?)"
+             (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, notes)
+             VALUES (?, 'expense', ?, ?, 'equipment', ?, ?, ?, ?)"
         )->execute([
-            $category, $amount, $eq_id, $form['cost_date'], $user_id,
+            fid(), $category, $amount, $eq_id, $form['cost_date'], $user_id,
             $form['notes'] ?: "{$category}: {$equipment['name']}",
         ]);
         $txn_id = (int)$db->lastInsertId();
 
         if ($form['cost_type'] === 'maintenance') {
-            $db->prepare("UPDATE equipment SET last_maintenance_date = ? WHERE id = ?")
+            $db->prepare("UPDATE equipment SET last_maintenance_date = ? WHERE id = ? AND " . farmFilter())
                ->execute([$form['cost_date'], $eq_id]);
         }
 

@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'veterinarian']);
+requireFarmScope();
 requireModule('breeding');
 
 $db = getDB();
@@ -15,7 +17,7 @@ $stmt = $db->prepare(
     "SELECT br.*, c.tag_number AS mother_tag, c.breed
      FROM breeding_records br
      JOIN cows c ON c.id = br.cow_id
-     WHERE br.id = ?"
+     WHERE br.id = ? AND " . farmFilter('br')
 );
 $stmt->execute([$br_id]);
 $breeding = $stmt->fetch();
@@ -58,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!in_array($form['status'], $valid_statuses, true)) $errors[] = 'Invalid calf status selected.';
 
     if (empty($errors)) {
-        $chk = $db->prepare("SELECT id FROM calf_records WHERE calf_tag_number = ?");
+        $chk = $db->prepare("SELECT id FROM calf_records WHERE calf_tag_number = ? AND " . farmFilter());
         $chk->execute([$form['calf_tag_number']]);
         if ($chk->fetch()) $errors[] = 'That calf tag number is already in use.';
     }
@@ -69,9 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $db->prepare(
             "INSERT INTO calf_records
-             (breeding_record_id, mother_cow_id, calf_tag_number, birth_date, birth_weight, gender, status, notes)
-             VALUES (?,?,?,?,?,?,?,?)"
+             (farm_id, breeding_record_id, mother_cow_id, calf_tag_number, birth_date, birth_weight, gender, status, notes)
+             VALUES (?,?,?,?,?,?,?,?,?)"
         )->execute([
+            fid(),
             $br_id,
             (int)$breeding['cow_id'],
             $form['calf_tag_number'],

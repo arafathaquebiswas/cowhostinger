@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('sales');
 
 $db = getDB();
@@ -15,12 +17,14 @@ $form = [
 ];
 
 // Cows ready for sale
-$ready_cows = $db->query(
+$rc_stmt = $db->prepare(
     "SELECT id, tag_number, breed, purchase_price
      FROM cows
-     WHERE status = 'ready_for_sale'
+     WHERE status = 'ready_for_sale' AND " . farmFilter() . "
      ORDER BY tag_number ASC"
-)->fetchAll();
+);
+$rc_stmt->execute();
+$ready_cows = $rc_stmt->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
@@ -52,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Verify cow still ready_for_sale (race condition guard)
     $cow = null;
     if (empty($errors)) {
-        $sel = $db->prepare("SELECT id, tag_number, breed, purchase_price, status FROM cows WHERE id = ? AND status = 'ready_for_sale'");
+        $sel = $db->prepare("SELECT id, tag_number, breed, purchase_price, status FROM cows WHERE id = ? AND status = 'ready_for_sale' AND " . farmFilter());
         $sel->execute([$cow_id]);
         $cow = $sel->fetch();
         if (!$cow) $errors[] = 'Selected cow is no longer available for sale.';
@@ -68,20 +72,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             // Insert cow sale
             $db->prepare(
-                "INSERT INTO cow_sales (cow_id, buyer_name, sale_price, sale_date, profit_loss, approved_by, notes)
-                 VALUES (?,?,?,?,?,?,?)"
-            )->execute([$cow_id, $form['buyer_name'], $sale_price, $form['sale_date'], $profit_loss, $user_id, $notes_val]);
+                "INSERT INTO cow_sales (farm_id, cow_id, buyer_name, sale_price, sale_date, profit_loss, approved_by, notes)
+                 VALUES (?,?,?,?,?,?,?,?)"
+            )->execute([fid(), $cow_id, $form['buyer_name'], $sale_price, $form['sale_date'], $profit_loss, $user_id, $notes_val]);
             $sale_id = (int)$db->lastInsertId();
 
             // Mark cow as sold
-            $db->prepare("UPDATE cows SET status = 'sold' WHERE id = ?")->execute([$cow_id]);
+            $db->prepare("UPDATE cows SET status = 'sold' WHERE id = ? AND " . farmFilter())->execute([$cow_id]);
 
             // Auto-create finance transaction
             $finance_notes = "Cow #{$cow['tag_number']} sold to {$form['buyer_name']}";
             $db->prepare(
-                "INSERT INTO finance_transactions (type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
-                 VALUES ('income','Cow Sales',?,?,?,?,?,?,?)"
-            )->execute([$sale_price, 'sales', $sale_id, $form['sale_date'], $user_id, $user_id, $finance_notes]);
+                "INSERT INTO finance_transactions (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, approved_by, notes)
+                 VALUES (?, 'income','Cow Sales',?,?,?,?,?,?,?)"
+            )->execute([fid(), $sale_price, 'sales', $sale_id, $form['sale_date'], $user_id, $user_id, $finance_notes]);
 
             auditLog($user_id, 'CREATE_COW_SALE', 'cow_sales', $sale_id, null, [
                 'cow_id'      => $cow_id,

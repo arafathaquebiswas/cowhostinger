@@ -1,5 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/includes/role_guard.php';
+require_once dirname(__DIR__) . '/includes/farm_guard.php';
 startSecureSession();
 requireAuth();
 
@@ -14,15 +15,17 @@ $all   = !empty($input['all']);
 $db = getDB();
 
 if ($all) {
-    $db->exec("UPDATE alerts SET is_read = 1 WHERE is_read = 0");
+    $db->prepare("UPDATE alerts SET is_read = 1 WHERE is_read = 0 AND " . farmFilter())->execute();
     auditLog((int)$_SESSION['user_id'], 'MARK_ALL_ALERTS_READ', 'alerts');
 } elseif ($id > 0) {
-    $db->prepare("UPDATE alerts SET is_read = 1 WHERE id = ?")->execute([$id]);
+    $db->prepare("UPDATE alerts SET is_read = 1 WHERE id = ? AND " . farmFilter())->execute([$id]);
     auditLog((int)$_SESSION['user_id'], 'MARK_ALERT_READ', 'alerts', $id);
 } else {
     jsonResponse(['error' => 'Invalid request — provide id or all=true'], 400);
 }
 
-$unread = (int)$db->query("SELECT COUNT(*) FROM alerts WHERE is_read = 0")->fetchColumn();
+$uc_stmt = $db->prepare("SELECT COUNT(*) FROM alerts WHERE is_read = 0 AND " . farmFilter());
+$uc_stmt->execute();
+$unread = (int)$uc_stmt->fetchColumn();
 
 jsonResponse(['success' => true, 'unread_count' => $unread]);

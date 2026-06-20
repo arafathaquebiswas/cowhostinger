@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
+require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
 requireRole(['admin', 'accountant']);
+requireFarmScope();
 requireModule('sales');
 
 $page_title = 'Sales';
@@ -24,14 +26,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_cow_sale') {
         $sale_id = (int)($_POST['sale_id'] ?? 0);
         if ($sale_id > 0) {
-            $sel = $db->prepare("SELECT cs.*, c.tag_number FROM cow_sales cs JOIN cows c ON c.id=cs.cow_id WHERE cs.id=?");
+            $sel = $db->prepare("SELECT cs.*, c.tag_number FROM cow_sales cs JOIN cows c ON c.id=cs.cow_id WHERE cs.id=? AND " . farmFilter('c'));
             $sel->execute([$sale_id]);
             $sale = $sel->fetch();
             if ($sale) {
                 $db->beginTransaction();
                 try {
-                    $db->prepare("DELETE FROM cow_sales WHERE id=?")->execute([$sale_id]);
-                    $db->prepare("DELETE FROM finance_transactions WHERE related_module='sales' AND reference_id=?")->execute([$sale_id]);
+                    $db->prepare("DELETE cs FROM cow_sales cs JOIN cows c ON c.id=cs.cow_id WHERE cs.id=? AND " . farmFilter('c'))->execute([$sale_id]);
+                    $db->prepare("DELETE ft FROM finance_transactions ft WHERE ft.related_module='sales' AND ft.reference_id=? AND ft.farm_id=?")->execute([$sale_id, fid()]);
                     $db->prepare("UPDATE cows SET status='ready_for_sale' WHERE id=?")->execute([$sale['cow_id']]);
                     auditLog($user_id, 'DELETE_COW_SALE', 'cow_sales', $sale_id, $sale, null);
                     $db->commit();
@@ -47,14 +49,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_meat_sale') {
         $sale_id = (int)($_POST['sale_id'] ?? 0);
         if ($sale_id > 0) {
-            $sel = $db->prepare("SELECT ms.*, c.tag_number FROM meat_sales ms JOIN cows c ON c.id=ms.cow_id WHERE ms.id=?");
+            $sel = $db->prepare("SELECT ms.*, c.tag_number FROM meat_sales ms JOIN cows c ON c.id=ms.cow_id WHERE ms.id=? AND " . farmFilter('c'));
             $sel->execute([$sale_id]);
             $sale = $sel->fetch();
             if ($sale) {
                 $db->beginTransaction();
                 try {
-                    $db->prepare("DELETE FROM meat_sales WHERE id=?")->execute([$sale_id]);
-                    $db->prepare("DELETE FROM finance_transactions WHERE related_module='meat_sales' AND reference_id=?")->execute([$sale_id]);
+                    $db->prepare("DELETE ms FROM meat_sales ms JOIN cows c ON c.id=ms.cow_id WHERE ms.id=? AND " . farmFilter('c'))->execute([$sale_id]);
+                    $db->prepare("DELETE ft FROM finance_transactions ft WHERE ft.related_module='meat_sales' AND ft.reference_id=? AND ft.farm_id=?")->execute([$sale_id, fid()]);
                     auditLog($user_id, 'DELETE_MEAT_SALE', 'meat_sales', $sale_id, $sale, null);
                     $db->commit();
                     flashMessage('success', "Meat sale for Cow #{$sale['tag_number']} deleted.");
@@ -77,7 +79,9 @@ $page_ms = max(1, (int)($_GET['page_ms'] ?? 1));
 $per_page = 25;
 
 // ---- Cow sales ----
-$total_cs = (int)$db->query("SELECT COUNT(*) FROM cow_sales")->fetchColumn();
+$total_cs_stmt = $db->prepare("SELECT COUNT(*) FROM cow_sales cs JOIN cows c ON c.id=cs.cow_id WHERE " . farmFilter('c'));
+$total_cs_stmt->execute();
+$total_cs = (int)$total_cs_stmt->fetchColumn();
 $pager_cs = paginate($total_cs, $per_page, $page_cs);
 
 $stmt = $db->prepare(
@@ -87,21 +91,27 @@ $stmt = $db->prepare(
      FROM cow_sales cs
      JOIN cows c ON c.id = cs.cow_id
      LEFT JOIN users u ON u.id = cs.approved_by
+     WHERE " . farmFilter('c') . "
      ORDER BY cs.sale_date DESC, cs.id DESC
      LIMIT ? OFFSET ?"
 );
 $stmt->execute([$per_page, $pager_cs['offset']]);
 $cow_sales = $stmt->fetchAll();
 
-$cs_totals = $db->query(
+$cs_totals_stmt = $db->prepare(
     "SELECT COUNT(*) AS cnt,
-            COALESCE(SUM(sale_price),0) AS revenue,
-            COALESCE(SUM(profit_loss),0) AS profit
-     FROM cow_sales"
-)->fetch();
+            COALESCE(SUM(cs.sale_price),0) AS revenue,
+            COALESCE(SUM(cs.profit_loss),0) AS profit
+     FROM cow_sales cs JOIN cows c ON c.id=cs.cow_id
+     WHERE " . farmFilter('c')
+);
+$cs_totals_stmt->execute();
+$cs_totals = $cs_totals_stmt->fetch();
 
 // ---- Meat sales ----
-$total_ms = (int)$db->query("SELECT COUNT(*) FROM meat_sales")->fetchColumn();
+$total_ms_stmt = $db->prepare("SELECT COUNT(*) FROM meat_sales ms JOIN cows c ON c.id=ms.cow_id WHERE " . farmFilter('c'));
+$total_ms_stmt->execute();
+$total_ms = (int)$total_ms_stmt->fetchColumn();
 $pager_ms = paginate($total_ms, $per_page, $page_ms);
 
 $stmt2 = $db->prepare(
@@ -109,18 +119,22 @@ $stmt2 = $db->prepare(
             c.id AS cow_id, c.tag_number, c.breed
      FROM meat_sales ms
      JOIN cows c ON c.id = ms.cow_id
+     WHERE " . farmFilter('c') . "
      ORDER BY ms.sale_date DESC, ms.id DESC
      LIMIT ? OFFSET ?"
 );
 $stmt2->execute([$per_page, $pager_ms['offset']]);
 $meat_sales = $stmt2->fetchAll();
 
-$ms_totals = $db->query(
+$ms_totals_stmt = $db->prepare(
     "SELECT COUNT(*) AS cnt,
-            COALESCE(SUM(total_revenue),0) AS revenue,
-            COALESCE(SUM(kg_sold),0) AS kg
-     FROM meat_sales"
-)->fetch();
+            COALESCE(SUM(ms.total_revenue),0) AS revenue,
+            COALESCE(SUM(ms.kg_sold),0) AS kg
+     FROM meat_sales ms JOIN cows c ON c.id=ms.cow_id
+     WHERE " . farmFilter('c')
+);
+$ms_totals_stmt->execute();
+$ms_totals = $ms_totals_stmt->fetch();
 
 function event_type_badge(string $t): string {
     return match($t) {
