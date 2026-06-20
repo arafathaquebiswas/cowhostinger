@@ -188,10 +188,10 @@ function createAlert(string $type, string $severity, string $message, ?string $r
     try {
         $db   = getDB();
         $stmt = $db->prepare(
-            'INSERT INTO alerts (type, severity, message, related_table, related_id)
-             VALUES (?, ?, ?, ?, ?)'
+            'INSERT INTO alerts (farm_id, type, severity, message, related_table, related_id)
+             VALUES (?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$type, $severity, $message, $relatedTable, $relatedId]);
+        $stmt->execute([fid(), $type, $severity, $message, $relatedTable, $relatedId]);
     } catch (Exception $e) {
         error_log('[ALERT] ' . $e->getMessage());
     }
@@ -200,7 +200,7 @@ function createAlert(string $type, string $severity, string $message, ?string $r
 function getUnreadAlertCount(): int {
     try {
         $db   = getDB();
-        $stmt = $db->query('SELECT COUNT(*) FROM alerts WHERE is_read = 0');
+        $stmt = $db->query('SELECT COUNT(*) FROM alerts WHERE is_read = 0 AND ' . farmFilter());
         return (int)$stmt->fetchColumn();
     } catch (Exception $e) {
         return 0;

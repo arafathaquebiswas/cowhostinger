@@ -8,6 +8,12 @@ $page_title = 'Audit Log';
 $active_nav = 'audit_log';
 $db = getDB();
 
+// audit_log has no farm_id column — scope via users table JOIN
+// superadmin sees all farms; farm admins see only their own farm's actions
+$farm_scope = isSuperAdmin()
+    ? '1=1'
+    : ('al.user_id IN (SELECT id FROM users WHERE ' . farmFilter() . ')');
+
 // Filters
 $filter_user   = (int)($_GET['user_id']     ?? 0);
 $filter_action = sanitize($_GET['action']   ?? '');
@@ -17,7 +23,7 @@ $date_to       = trim($_GET['date_to']      ?? '');
 $page          = max(1, (int)($_GET['page'] ?? 1));
 $per_page      = 40;
 
-$where  = ['1=1'];
+$where  = [$farm_scope];
 $params = [];
 
 if ($filter_user > 0) {
@@ -62,18 +68,21 @@ $stmt = $db->prepare(
 $stmt->execute(array_merge($params, [$per_page, $pager['offset']]));
 $logs = $stmt->fetchAll();
 
-// For filter dropdowns
-$users   = $db->query("SELECT id, name, role FROM users ORDER BY name ASC")->fetchAll();
-$tables  = $db->query("SELECT DISTINCT table_name FROM audit_log ORDER BY table_name ASC")->fetchAll(PDO::FETCH_COLUMN);
-$actions = $db->query("SELECT DISTINCT action FROM audit_log ORDER BY action ASC")->fetchAll(PDO::FETCH_COLUMN);
+// For filter dropdowns (farm-scoped)
+$users_stmt = $db->prepare("SELECT id, name, role FROM users WHERE " . farmFilter() . " ORDER BY name ASC");
+$users_stmt->execute();
+$users = $users_stmt->fetchAll();
+$tables  = $db->query("SELECT DISTINCT al.table_name FROM audit_log al WHERE {$farm_scope} ORDER BY al.table_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+$actions = $db->query("SELECT DISTINCT al.action FROM audit_log al WHERE {$farm_scope} ORDER BY al.action ASC")->fetchAll(PDO::FETCH_COLUMN);
 
-// Summary KPIs
+// Summary KPIs (farm-scoped)
 $kpi = $db->query(
     "SELECT COUNT(*) AS total,
-            SUM(DATE(created_at) = CURDATE()) AS today,
-            SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week,
-            COUNT(DISTINCT user_id) AS unique_users
-     FROM audit_log"
+            SUM(DATE(al.created_at) = CURDATE()) AS today,
+            SUM(al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week,
+            COUNT(DISTINCT al.user_id) AS unique_users
+     FROM audit_log al
+     WHERE {$farm_scope}"
 )->fetch();
 
 // Helper: format JSON value for display
