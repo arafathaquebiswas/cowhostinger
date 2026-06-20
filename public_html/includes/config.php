@@ -5,15 +5,15 @@
 // ============================================================
 
 // Database
-define('DB_HOST',    'localhost');
-define('DB_NAME',    'your_db_name');     // ← Change this
-define('DB_USER',    'your_db_user');     // ← Change this
-define('DB_PASS',    'your_db_password'); // ← Change this
+define('DB_HOST',    '127.0.0.1');
+define('DB_NAME',    'cow_management');
+define('DB_USER',    'root');
+define('DB_PASS',    '');
 define('DB_CHARSET', 'utf8mb4');
 
 // Application
 define('APP_NAME',    'Cow Management & Diagnosis System');
-define('APP_URL',     'https://yourdomain.com'); // No trailing slash
+define('APP_URL',     'http://localhost:8080'); // No trailing slash
 define('APP_VERSION', '1.0.0');
 
 // Session
