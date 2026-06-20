@@ -116,7 +116,7 @@ for ($h = 0; $h < 24; $h++) {
     $hour_data[]   = (int)($hourly_map[$h] ?? 0);
 }
 
-$extra_js  = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+$extra_js  = ['https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'];
 
 // Pass PHP arrays to JS via JSON
 $js_chart_labels   = json_encode($chart_labels, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);

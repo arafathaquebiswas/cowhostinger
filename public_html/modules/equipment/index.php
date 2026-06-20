@@ -124,6 +124,49 @@ function maintenance_warning(?string $last_date, ?int $lifespan_months): string 
 $qs = static fn(array $p): string =>
     '/modules/equipment/index.php?' . http_build_query(array_filter($p, static fn($v) => $v !== '' && $v !== null));
 
+$extra_js = ['https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'];
+
+$pie_op  = $status_counts['operational'] ?? 0;
+$pie_mn  = $status_counts['maintenance'] ?? 0;
+$pie_dmg = $status_counts['damaged']     ?? 0;
+
+$inline_js = <<<JS
+(function () {
+    var ctx = document.getElementById('equipChart');
+    if (!ctx || ({$total_all} === 0)) return;
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Operational', 'In Maintenance', 'Damaged'],
+            datasets: [{
+                data: [{$pie_op}, {$pie_mn}, {$pie_dmg}],
+                backgroundColor: ['#16A34A','#D97706','#DC2626'],
+                hoverOffset: 6,
+                borderWidth: 2,
+                borderColor: '#fff',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 16, font: { size: 12 } } },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            var total = ctx.dataset.data.reduce(function(a,b){return a+b;},0);
+                            var pct = total > 0 ? Math.round(ctx.parsed / total * 100) : 0;
+                            return ' ' + ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+JS;
+
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 ?>
 
@@ -155,6 +198,30 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div class="kpi-value"><?= $status_counts['damaged'] ?? 0 ?></div>
     </div>
 </div>
+
+<!-- Status chart -->
+<?php if ($total_all > 0): ?>
+<div class="card" style="margin-bottom:1.25rem;padding:1rem">
+    <div style="display:grid;grid-template-columns:220px 1fr;gap:1.5rem;align-items:center">
+        <div style="position:relative;height:180px">
+            <canvas id="equipChart"></canvas>
+        </div>
+        <div>
+            <div style="font-weight:600;font-size:.95rem;margin-bottom:.75rem">Equipment Status Overview</div>
+            <?php foreach (['operational'=>['#16A34A','Operational'],'maintenance'=>['#D97706','In Maintenance'],'damaged'=>['#DC2626','Damaged']] as $sv=>[$color,$label]): ?>
+            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem">
+                <div style="width:12px;height:12px;border-radius:50%;background:<?= $color ?>;flex-shrink:0"></div>
+                <span style="font-size:.88rem"><?= $label ?></span>
+                <span style="font-weight:700;margin-left:auto"><?= $status_counts[$sv] ?? 0 ?></span>
+                <span class="text-muted" style="font-size:.8rem;width:36px;text-align:right">
+                    <?= $total_all > 0 ? round(($status_counts[$sv] ?? 0) / $total_all * 100) : 0 ?>%
+                </span>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Quick filters + search -->
 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem">

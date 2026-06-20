@@ -1,7 +1,9 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
-requireRole(['admin', 'veterinarian']);
-requireModule('feed_medicine');
+requireAuth();
+// Redirect to the dedicated treatments module
+$qs = isset($_GET['cow_id']) ? '?cow_id=' . (int)$_GET['cow_id'] : '';
+redirect('/modules/treatments/form.php' . $qs);
 
 $db = getDB();
 $errors = [];
