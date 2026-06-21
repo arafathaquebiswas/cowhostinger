@@ -75,8 +75,9 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
     .upgrade-plan-name{font-weight:700;font-size:.82rem;color:#1F2937}
     .upgrade-plan-price{font-size:.75rem;color:#6B7280;margin-top:.15rem}
     .upgrade-modal-close{position:absolute;top:.75rem;right:.75rem;background:none;border:none;font-size:1.4rem;cursor:pointer;color:#9CA3AF;line-height:1}
-    /* ── Free watermark ───────────────────────────────────────── */
-    .saas-watermark{position:fixed;top:50%;right:-30px;transform:translateY(-50%) rotate(90deg);font-size:4rem;font-weight:900;color:rgba(0,0,0,.03);pointer-events:none;z-index:1;letter-spacing:.1em;user-select:none;white-space:nowrap}
+    /* ── AB IT watermark ──────────────────────────────────────────── */
+    .saas-watermark{position:fixed;top:50%;right:-30px;transform:translateY(-50%) rotate(90deg);font-size:4rem;font-weight:900;color:rgba(45,106,79,.05);pointer-events:none;z-index:1;letter-spacing:.1em;user-select:none;white-space:nowrap}
+    .abit-stamp{position:fixed;bottom:12px;right:14px;font-size:.65rem;font-weight:700;color:rgba(45,106,79,.4);letter-spacing:.08em;pointer-events:none;z-index:2;user-select:none}
     /* ── Usage meter bars ─────────────────────────────────────── */
     .usage-meter{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin:.25rem 0 .1rem}
     .usage-meter-fill{height:100%;border-radius:3px;background:var(--primary);transition:.3s}
@@ -88,9 +89,8 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
     </style>
 </head>
 <body>
-<?php if ($_layout_is_free): ?>
 <div class="saas-watermark">AB IT</div>
-<?php endif; ?>
+<div class="abit-stamp">AB IT</div>
 
 <?php if (isImpersonating()): ?>
 <div class="impersonation-banner">
