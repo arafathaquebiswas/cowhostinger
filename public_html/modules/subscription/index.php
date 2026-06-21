@@ -12,6 +12,23 @@ $fid = fid();
 $plan  = farmPlan();
 $usage = farmAllUsage();
 
+// Auto-migrate plans table columns if not yet run
+(function(PDO $db) {
+    $existing = array_column($db->query("SHOW COLUMNS FROM plans")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    $needed = [
+        "offer_price"  => "ALTER TABLE plans ADD COLUMN offer_price  DECIMAL(10,2) DEFAULT NULL AFTER price_monthly",
+        "offer_active" => "ALTER TABLE plans ADD COLUMN offer_active TINYINT(1) NOT NULL DEFAULT 0 AFTER offer_price",
+        "offer_label"  => "ALTER TABLE plans ADD COLUMN offer_label  VARCHAR(100) DEFAULT NULL AFTER offer_active",
+        "offer_end"    => "ALTER TABLE plans ADD COLUMN offer_end    DATE DEFAULT NULL AFTER offer_label",
+        "is_featured"  => "ALTER TABLE plans ADD COLUMN is_featured  TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
+    ];
+    foreach ($needed as $col => $sql) {
+        if (!in_array($col, $existing)) {
+            try { $db->exec($sql); } catch (Throwable $e) { error_log("[plans migration] $col: " . $e->getMessage()); }
+        }
+    }
+})($db);
+
 // Load all available plans
 $all_plans = $db->query("SELECT * FROM plans WHERE is_active=1 ORDER BY price_monthly ASC")->fetchAll();
 
@@ -86,13 +103,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'payme
     $effective_price = ($plan_row['offer_active'] && $plan_row['offer_price'] > 0)
                        ? (float)$plan_row['offer_price']
                        : (float)$plan_row['price_monthly'];
-    $amount = $effective_price * $months;
 
-    $db->prepare(
-        "INSERT INTO payments (farm_id, plan_id, amount, currency, method, transaction_ref,
-                               status, months, notes, screenshot_path, created_at)
-         VALUES (?, ?, ?, 'BDT', ?, ?, 'pending', ?, ?, ?, NOW())"
-    )->execute([$fid, $plan_id, $amount, $method, $txn_ref, $months, $note ?: null, $screenshot_path]);
+    // Coupon validation
+    $coupon_code     = strtoupper(trim($_POST['coupon_code'] ?? ''));
+    $coupon_id       = null;
+    $coupon_discount = null;
+    if ($coupon_code !== '') {
+        $tables = array_column($db->query("SHOW TABLES")->fetchAll(PDO::FETCH_NUM), 0);
+        if (in_array('coupons', $tables)) {
+            $cstmt = $db->prepare("SELECT * FROM coupons WHERE code=? AND is_active=1 LIMIT 1");
+            $cstmt->execute([$coupon_code]);
+            $coupon = $cstmt->fetch();
+            if ($coupon
+                && (!$coupon['expires_at'] || $coupon['expires_at'] >= date('Y-m-d'))
+                && ($coupon['max_uses'] === null || $coupon['used_count'] < $coupon['max_uses'])
+                && ($coupon['plan_id'] === null || (int)$coupon['plan_id'] === $plan_id)
+            ) {
+                $coupon_id = (int)$coupon['id'];
+                if ($coupon['discount_type'] === 'percent') {
+                    $coupon_discount = round($effective_price * $months * $coupon['discount_value'] / 100, 2);
+                } else {
+                    $coupon_discount = min((float)$coupon['discount_value'], $effective_price * $months);
+                }
+            }
+        }
+    }
+
+    $amount = max(0, ($effective_price * $months) - (float)($coupon_discount ?? 0));
+
+    // Check payments table has coupon columns
+    $pay_cols = array_column($db->query("SHOW COLUMNS FROM payments")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    $has_coupon_cols = in_array('coupon_id', $pay_cols);
+
+    if ($has_coupon_cols) {
+        $db->prepare(
+            "INSERT INTO payments (farm_id, plan_id, amount, currency, method, transaction_ref,
+                                   status, months, notes, coupon_id, coupon_code, coupon_discount,
+                                   screenshot_path, created_at)
+             VALUES (?, ?, ?, 'BDT', ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NOW())"
+        )->execute([$fid, $plan_id, $amount, $method, $txn_ref, $months, $note ?: null,
+                    $coupon_id, $coupon_code ?: null, $coupon_discount, $screenshot_path]);
+    } else {
+        $db->prepare(
+            "INSERT INTO payments (farm_id, plan_id, amount, currency, method, transaction_ref,
+                                   status, months, notes, screenshot_path, created_at)
+             VALUES (?, ?, ?, 'BDT', ?, ?, 'pending', ?, ?, ?, NOW())"
+        )->execute([$fid, $plan_id, $amount, $method, $txn_ref, $months, $note ?: null, $screenshot_path]);
+    }
+
+    // Increment coupon usage
+    if ($coupon_id) {
+        $db->prepare("UPDATE coupons SET used_count = used_count + 1 WHERE id=?")->execute([$coupon_id]);
+    }
 
     auditLog($uid, 'PAYMENT_REQUEST', 'payments', (int)$db->lastInsertId(), null, [
         'plan' => $plan_row['name'], 'amount' => $amount, 'method' => $method
@@ -441,6 +503,22 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <img id="screenshotPreview" src="" alt="Preview" style="display:none;margin-top:.75rem;max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border)">
             </div>
 
+            <!-- Coupon code -->
+            <div class="form-group">
+                <label class="form-label">Coupon Code <span style="color:#9CA3AF;font-weight:400">(optional)</span></label>
+                <div style="display:flex;gap:.5rem">
+                    <input type="text" name="coupon_code" id="couponCodeField" class="form-control"
+                           placeholder="Enter code" maxlength="32"
+                           style="text-transform:uppercase;font-family:monospace;font-weight:700;letter-spacing:.05em;flex:1"
+                           oninput="resetCoupon()">
+                    <button type="button" onclick="applyCoupon()"
+                            style="padding:.5rem .9rem;border:1px solid #7c3aed;border-radius:8px;background:#f5f3ff;color:#7c3aed;font-weight:700;font-size:.82rem;cursor:pointer;white-space:nowrap">
+                        Apply
+                    </button>
+                </div>
+                <div id="couponMsg" style="margin-top:.35rem;font-size:.8rem;display:none"></div>
+            </div>
+
             <!-- Optional note -->
             <div class="form-group">
                 <label class="form-label">Note to AB IT <span style="color:#9CA3AF;font-weight:400">(optional)</span></label>
@@ -460,10 +538,14 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 <?php require_once dirname(__DIR__, 2) . '/includes/layout_footer.php'; ?>
 
 <script>
-var _planPrice = 0;
+var _planPrice   = 0;
+var _planId      = 0;
+var _couponDisc  = 0;   // absolute discount in ৳
 
 function openPaymentModal(planId, planName, effectivePrice, originalPrice) {
-    _planPrice = effectivePrice;
+    _planPrice  = effectivePrice;
+    _planId     = planId;
+    _couponDisc = 0;
     document.getElementById('modalPlanId').value = planId;
     document.getElementById('modalPlanName').textContent = 'Upgrade to ' + planName;
     var priceEl = document.getElementById('modalPlanPrice');
@@ -473,6 +555,9 @@ function openPaymentModal(planId, planName, effectivePrice, originalPrice) {
     } else {
         priceEl.textContent = '৳' + Math.round(effectivePrice).toLocaleString() + '/month';
     }
+    // Reset coupon UI
+    document.getElementById('couponCodeField').value = '';
+    resetCoupon();
     updateAmount();
     document.getElementById('paymentModalOverlay').style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -485,8 +570,63 @@ function closePaymentModal() {
 
 function updateAmount() {
     var months = parseInt(document.querySelector('[name="months"]').value || 1);
-    var total  = _planPrice * months;
-    document.getElementById('totalAmount').textContent = '৳' + total.toLocaleString('en-BD');
+    var base   = _planPrice * months;
+    var disc   = _couponDisc;  // already absolute
+    var total  = Math.max(0, base - disc);
+    var el     = document.getElementById('totalAmount');
+    if (disc > 0) {
+        el.innerHTML = '<span style="text-decoration:line-through;color:#9ca3af;font-size:.85rem">৳' + base.toLocaleString('en-BD') + '</span>'
+                     + ' <span style="color:#16a34a">৳' + total.toLocaleString('en-BD') + '</span>';
+    } else {
+        el.textContent = '৳' + total.toLocaleString('en-BD');
+    }
+}
+
+function applyCoupon() {
+    var code = document.getElementById('couponCodeField').value.trim().toUpperCase();
+    var msg  = document.getElementById('couponMsg');
+    if (!code) { showCouponMsg('Enter a coupon code first.', false); return; }
+    msg.style.display = 'block';
+    msg.textContent   = 'Checking…';
+    msg.style.color   = '#6b7280';
+
+    fetch('/modules/subscription/validate_coupon.php?code=' + encodeURIComponent(code) + '&plan_id=' + _planId)
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                var months = parseInt(document.querySelector('[name="months"]').value || 1);
+                var base   = _planPrice * months;
+                if (d.discount_type === 'percent') {
+                    _couponDisc = Math.round(base * d.discount_value) / 100;
+                } else {
+                    _couponDisc = Math.min(d.discount_value, base);
+                }
+                showCouponMsg('✓ ' + d.message, true);
+                updateAmount();
+            } else {
+                _couponDisc = 0;
+                showCouponMsg('✗ ' + d.message, false);
+                updateAmount();
+            }
+        })
+        .catch(function() {
+            showCouponMsg('Could not validate coupon. Try again.', false);
+        });
+}
+
+function resetCoupon() {
+    _couponDisc = 0;
+    var msg = document.getElementById('couponMsg');
+    if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+    updateAmount();
+}
+
+function showCouponMsg(text, ok) {
+    var msg = document.getElementById('couponMsg');
+    msg.style.display = 'block';
+    msg.textContent   = text;
+    msg.style.color   = ok ? '#15803d' : '#b91c1c';
+    msg.style.fontWeight = '600';
 }
 
 function selectMethod(val) {

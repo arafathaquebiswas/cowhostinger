@@ -91,7 +91,7 @@ function login(string $email, string $password): array {
     session_regenerate_id(true);
     _setUserSession($user);
     auditLog((int)$user['id'], 'LOGIN', 'users', (int)$user['id']);
-    createDeviceSession((int)$user['id']);
+    try { createDeviceSession((int)$user['id']); } catch (Throwable $e) { error_log('[DeviceSession] ' . $e->getMessage()); }
 
     if (password_needs_rehash($user['password_hash'], PASSWORD_BCRYPT, ['cost' => 12])) {
         $newHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
@@ -135,7 +135,7 @@ function loginByPhone(string $farm_code, string $phone, string $password): array
     session_regenerate_id(true);
     _setUserSession($user);
     auditLog((int)$user['id'], 'LOGIN_PHONE', 'users', (int)$user['id']);
-    createDeviceSession((int)$user['id']);
+    try { createDeviceSession((int)$user['id']); } catch (Throwable $e) { error_log('[DeviceSession] ' . $e->getMessage()); }
 
     return ['success' => true, 'role' => $user['role']];
 }
@@ -286,28 +286,27 @@ function createDeviceSession(int $user_id): void {
 
 function validateDeviceSession(): void {
     if (empty($_SESSION['_ds_token'])) return;
+    try {
+        $db   = getDB();
+        $stmt = $db->prepare(
+            "SELECT id FROM user_sessions
+             WHERE token=? AND is_active=1
+               AND last_active > DATE_SUB(NOW(), INTERVAL ? SECOND)"
+        );
+        $stmt->execute([$_SESSION['_ds_token'], DEVICE_IDLE]);
+        $row = $stmt->fetch();
 
-    $db   = getDB();
-    $stmt = $db->prepare(
-        "SELECT id FROM user_sessions
-         WHERE token=? AND is_active=1
-           AND last_active > DATE_SUB(NOW(), INTERVAL ? SECOND)"
-    );
-    $stmt->execute([$_SESSION['_ds_token'], DEVICE_IDLE]);
-    $row = $stmt->fetch();
+        if (!$row) {
+            logout();
+            header('Location: /index.php?ended=1');
+            exit;
+        }
 
-    if (!$row) {
-        // Kicked by another login or session expired — force logout
-        logout();
-        header('Location: /index.php?ended=1');
-        exit;
-    }
-
-    // Throttled heartbeat: write to DB at most once per minute
-    if ((time() - ($_SESSION['_ds_ping'] ?? 0)) >= 60) {
-        $db->prepare("UPDATE user_sessions SET last_active=NOW() WHERE id=?")->execute([$row['id']]);
-        $_SESSION['_ds_ping'] = time();
-    }
+        if ((time() - ($_SESSION['_ds_ping'] ?? 0)) >= 60) {
+            $db->prepare("UPDATE user_sessions SET last_active=NOW() WHERE id=?")->execute([$row['id']]);
+            $_SESSION['_ds_ping'] = time();
+        }
+    } catch (Throwable $e) { error_log('[DeviceSession] ' . $e->getMessage()); }
 }
 
 function revokeDeviceSession(): void {

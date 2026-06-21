@@ -97,7 +97,7 @@ $action_colors = [
     ] as [$lbl,$val,$col]): ?>
     <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid <?= $col ?>;border-radius:8px;padding:.5rem .9rem;min-width:120px">
         <div style="font-size:.72rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase"><?= $lbl ?></div>
-        <div style="font-size:1.35rem;font-weight:800;color:<?= $col ?>"><?= number_format($val) ?></div>
+        <div style="font-size:1.35rem;font-weight:800;color:<?= $col ?>"><?= number_format((int)$val) ?></div>
     </div>
     <?php endforeach; ?>
 </div>

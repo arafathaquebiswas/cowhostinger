@@ -313,7 +313,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <a href="/modules/support/index.php" class="nav-item<?= $_nav_active('support') ?>">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
                 Tickets
-                <?php $_supp_open=(int)(getDB()->query("SELECT COUNT(*) FROM support_tickets WHERE assigned_to={$_layout_user['id']} AND status IN ('open','in_progress')")->fetchColumn()??0); if($_supp_open>0): ?>
+                <?php $_supp_q=getDB()->prepare("SELECT COUNT(*) FROM support_tickets WHERE assigned_to=? AND status IN ('open','in_progress')"); $_supp_q->execute([$_layout_user['id']]); $_supp_open=(int)($_supp_q->fetchColumn()??0); if($_supp_open>0): ?>
                 <span class="nav-badge"><?= $_supp_open ?></span>
                 <?php endif; ?>
             </a>
@@ -583,6 +583,10 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <a href="/modules/ceo/audit.php"         class="nav-item<?= $_nav_active('ceo_audit') ?>" style="padding-left:1.4rem">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.7"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                         CEO Audit Logs
+                    </a>
+                    <a href="/modules/ceo/coupons.php"       class="nav-item<?= $_nav_active('ceo_coupons') ?>" style="padding-left:1.4rem">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.7"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        Coupons
                     </a>
                     <div style="padding:.35rem .9rem .1rem;margin-top:.25rem;font-size:.68rem;font-weight:700;color:rgba(167,139,250,.8);text-transform:uppercase;letter-spacing:.08em">System</div>
                     <a href="/modules/super_admin/dashboard.php" class="nav-item<?= $_nav_active('ceo_dashboard') ?>" style="padding-left:1.4rem">CEO Dashboard</a>

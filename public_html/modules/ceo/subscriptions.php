@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Fetch farm + current sub info
         $farm_stmt = $db->prepare(
-            "SELECT f.id, f.name AS farm_name,
+            "SELECT f.id, f.farm_name,
                     u.name AS owner_name,
                     s.id AS sub_id, s.plan_id AS old_plan_id, s.end_date AS old_end,
                     s.is_lifetime AS was_lifetime,
@@ -155,7 +155,7 @@ $where  = ['1=1'];
 $params = [];
 
 if ($search !== '') {
-    $where[]  = '(f.name LIKE ? OR u.name LIKE ? OR u.email LIKE ?)';
+    $where[]  = '(f.farm_name LIKE ? OR u.name LIKE ? OR u.email LIKE ?)';
     $like     = "%{$search}%";
     $params[] = $like; $params[] = $like; $params[] = $like;
 }
@@ -179,7 +179,7 @@ $page  = min($page, $pages);
 
 $params_page = array_merge($params, [$per, ($page-1)*$per]);
 $farms_stmt  = $db->prepare(
-    "SELECT f.id AS farm_id, f.name AS farm_name, f.status AS farm_status,
+    "SELECT f.id AS farm_id, f.farm_name, f.status AS farm_status,
             u.name AS owner_name, u.email AS owner_email,
             s.id AS sub_id, s.status AS sub_status, s.start_date, s.end_date,
             s.is_lifetime, p.id AS plan_id, p.name AS plan_name

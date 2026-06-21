@@ -6,6 +6,27 @@ requireRole(['superadmin']);
 $db  = getDB();
 $uid = (int)$_SESSION['user_id'];
 
+// ── Auto-migrate: add offer + featured columns if missing ─────────────────────
+(function(PDO $db) {
+    $existing = array_column($db->query("SHOW COLUMNS FROM plans")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    $needed = [
+        "offer_price"  => "ALTER TABLE plans ADD COLUMN offer_price  DECIMAL(10,2) DEFAULT NULL AFTER price_monthly",
+        "offer_active" => "ALTER TABLE plans ADD COLUMN offer_active TINYINT(1) NOT NULL DEFAULT 0 AFTER offer_price",
+        "offer_label"  => "ALTER TABLE plans ADD COLUMN offer_label  VARCHAR(100) DEFAULT NULL AFTER offer_active",
+        "offer_end"    => "ALTER TABLE plans ADD COLUMN offer_end    DATE DEFAULT NULL AFTER offer_label",
+        "is_featured"  => "ALTER TABLE plans ADD COLUMN is_featured  TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
+    ];
+    foreach ($needed as $col => $sql) {
+        if (!in_array($col, $existing)) {
+            try { $db->exec($sql); } catch (Throwable $e) { error_log("[plans migration] $col: " . $e->getMessage()); }
+        }
+    }
+    // Default: Pro plan is featured
+    if (!in_array('is_featured', $existing)) {
+        try { $db->exec("UPDATE plans SET is_featured=1 WHERE name='Pro'"); } catch (Throwable $e) {}
+    }
+})($db);
+
 // ── POST handlers ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
@@ -27,12 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('/modules/ceo/plans.php');
         }
 
-        if ($plan['name'] === 'Free') {
-            flashMessage('error', 'The Free plan price cannot be changed.');
-            redirect('/modules/ceo/plans.php');
-        }
-
-        $new_price        = max(0, (float)($_POST['price_monthly'] ?? $plan['price_monthly']));
+        // Free plan: always lock price at 0, still allow limits/features
+        $new_price        = ($plan['name'] === 'Free') ? 0.00 : max(0, (float)($_POST['price_monthly'] ?? $plan['price_monthly']));
         $new_billing      = (int)($_POST['billing_days'] ?? $plan['billing_days']);
         $cows_limit       = trim($_POST['cows_limit']       ?? '') === '' ? null : (int)$_POST['cows_limit'];
         $users_limit      = trim($_POST['users_limit']      ?? '') === '' ? null : (int)$_POST['users_limit'];
@@ -45,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $can_analytics    = isset($_POST['can_analytics'])      ? 1 : 0;
         $can_finance      = isset($_POST['can_finance'])        ? 1 : 0;
         $can_reports      = isset($_POST['can_reports'])        ? 1 : 0;
-        $can_milk_anlytx  = isset($_POST['can_milk_analytics']) ? 1 : 0;
+        $can_milk_analytics = isset($_POST['can_milk_analytics']) ? 1 : 0;
         $is_featured      = isset($_POST['is_featured'])        ? 1 : 0;
         $notes            = sanitize($_POST['notes'] ?? '');
 
@@ -66,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $new_price, $new_billing ?: null,
             $cows_limit, $users_limit, $workers_limit,
             $equipment_limit, $feed_limit, $medicine_limit, $diagnosis_limit,
-            $can_export, $can_analytics, $can_finance, $can_reports, $can_milk_anlytx,
+            $can_export, $can_analytics, $can_finance, $can_reports, $can_milk_analytics,
             $is_featured,
             $plan_id,
         ]);
@@ -213,6 +230,7 @@ function effectivePrice(array $p): array {
     </div>
     <div style="display:flex;gap:.5rem">
         <a href="/modules/ceo/index.php"         class="btn btn-secondary btn-sm">Control Center</a>
+        <a href="/modules/ceo/coupons.php"       class="btn btn-secondary btn-sm">&#x1F3AB; Coupons</a>
         <a href="/modules/ceo/subscriptions.php" class="btn btn-primary btn-sm">Subscription Manager</a>
     </div>
 </div>
@@ -317,9 +335,8 @@ function effectivePrice(array $p): array {
             <?php endforeach; ?>
         </div>
 
+        <!-- ── Tab toggles (non-free only) ── -->
         <?php if (!$is_free): ?>
-
-        <!-- ── Tab toggles ── -->
         <div style="display:flex;gap:.25rem;margin-bottom:.75rem" id="tabs-<?= $p['id'] ?>">
             <button type="button" onclick="switchTab(<?= $p['id'] ?>,'price')"
                     id="tab-price-<?= $p['id'] ?>"
@@ -332,6 +349,7 @@ function effectivePrice(array $p): array {
                 <?= $ep['has_offer'] ? 'Offer Active' : 'Set Offer' ?>
             </button>
         </div>
+        <?php endif; ?>
 
         <!-- ── Price & Limits panel ── -->
         <div id="panel-price-<?= $p['id'] ?>" style="display:block">
@@ -340,6 +358,11 @@ function effectivePrice(array $p): array {
             <input type="hidden" name="action"  value="update_price">
             <input type="hidden" name="plan_id" value="<?= $p['id'] ?>">
 
+            <?php if ($is_free): ?>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.55rem .8rem;margin-bottom:.75rem;font-size:.8rem;color:#166534;font-weight:600">
+                &#x1F7E2; Free plan — price is always ৳0. You can change limits &amp; features below.
+            </div>
+            <?php else: ?>
             <div style="font-size:.75rem;font-weight:600;color:var(--text-muted);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.04em">Price</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.75rem">
                 <div class="form-group" style="margin:0">
@@ -353,6 +376,7 @@ function effectivePrice(array $p): array {
                            value="<?= e($p['billing_days'] ?? '') ?>" min="1" placeholder="30">
                 </div>
             </div>
+            <?php endif; ?>
 
             <div style="font-size:.75rem;font-weight:600;color:var(--text-muted);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.04em">Limits <span style="font-weight:400;text-transform:none">(blank = unlimited)</span></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.75rem">
@@ -496,14 +520,11 @@ function effectivePrice(array $p): array {
         </form>
         </div>
 
-        <?php else: ?>
-        <p class="text-xs text-muted">Free plan pricing is fixed at ৳0 and cannot be changed.</p>
-        <?php endif; ?>
     </div>
 
-    <?php if (!$is_free): ?>
     <div class="card-footer" style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 1rem;font-size:.78rem">
         <span class="text-muted">Status: <?= $p['is_active'] ? '<span style="color:#16a34a;font-weight:600">Active</span>' : '<span style="color:#dc2626;font-weight:600">Inactive</span>' ?></span>
+        <?php if (!$is_free): ?>
         <form method="POST" style="margin:0">
             <?= csrfField() ?>
             <input type="hidden" name="action"  value="toggle_active">
@@ -513,8 +534,8 @@ function effectivePrice(array $p): array {
                 <?= $p['is_active'] ? 'Deactivate' : 'Activate' ?>
             </button>
         </form>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
 </div>
 <?php endforeach; ?>
 </div>
