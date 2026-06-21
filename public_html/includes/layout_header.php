@@ -329,6 +329,12 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                 Dashboard
             </a>
+            <?php if ($_can(['admin','manager','accountant'])): ?>
+            <a href="/modules/executive/dashboard.php" class="nav-item nav-pin<?= $_nav_active('executive_dashboard') ?>" style="background:<?= $_nav_active('executive_dashboard') ? '' : 'rgba(255,215,0,.07)' ?>;border:1px solid rgba(255,215,0,.15)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                <span style="color:#fbbf24;font-weight:700">Executive Dashboard</span>
+            </a>
+            <?php endif; ?>
             <?php if ($_module_enabled('workers') && $_can(['worker'])): ?>
             <a href="/modules/workers/my_tasks.php" class="nav-item nav-pin<?= $_nav_active('my_tasks') ?>">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
