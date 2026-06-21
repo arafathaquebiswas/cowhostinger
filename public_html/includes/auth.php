@@ -91,6 +91,7 @@ function login(string $email, string $password): array {
     session_regenerate_id(true);
     _setUserSession($user);
     auditLog((int)$user['id'], 'LOGIN', 'users', (int)$user['id']);
+    createDeviceSession((int)$user['id']);
 
     if (password_needs_rehash($user['password_hash'], PASSWORD_BCRYPT, ['cost' => 12])) {
         $newHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
@@ -134,6 +135,7 @@ function loginByPhone(string $farm_code, string $phone, string $password): array
     session_regenerate_id(true);
     _setUserSession($user);
     auditLog((int)$user['id'], 'LOGIN_PHONE', 'users', (int)$user['id']);
+    createDeviceSession((int)$user['id']);
 
     return ['success' => true, 'role' => $user['role']];
 }
@@ -171,6 +173,7 @@ function logout(): void {
     if (isLoggedIn()) {
         auditLog((int)$_SESSION['user_id'], 'LOGOUT', 'users', (int)$_SESSION['user_id']);
     }
+    revokeDeviceSession();
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $p = session_get_cookie_params();
@@ -226,4 +229,92 @@ function getRoleRedirect(string $role): string {
         'user'          => '/user_dashboard.php',
         default         => '/index.php',
     };
+}
+
+// ── Multi-Device Session Control ──────────────────────────────────────────────
+// Max 2 active sessions per user. 3rd login auto-kicks the oldest session.
+// Sessions expire after 30 minutes of inactivity.
+
+const DEVICE_MAX   = 2;
+const DEVICE_IDLE  = 1800; // 30 minutes in seconds
+
+function _getOrCreateDeviceId(): string {
+    $name = 'cow_did';
+    if (!empty($_COOKIE[$name]) && preg_match('/^[a-f0-9]{32}$/', $_COOKIE[$name])) {
+        return $_COOKIE[$name];
+    }
+    $did = bin2hex(random_bytes(16));
+    setcookie($name, $did, [
+        'expires'  => time() + 365 * 24 * 3600,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Strict',
+        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+    ]);
+    return $did;
+}
+
+function createDeviceSession(int $user_id): void {
+    $db    = getDB();
+    $token = bin2hex(random_bytes(32));
+    $fp    = hash('sha256', _getOrCreateDeviceId() . '|' . ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    $ip    = _getClientIp();
+    $ua    = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 500);
+
+    // Piggyback cleanup: expire idle sessions globally
+    $db->prepare("UPDATE user_sessions SET is_active=0 WHERE last_active < DATE_SUB(NOW(), INTERVAL ? SECOND)")
+       ->execute([DEVICE_IDLE]);
+
+    // Enforce limit: kick oldest active session if at/over limit
+    $cnt = $db->prepare("SELECT COUNT(*) FROM user_sessions WHERE user_id=? AND is_active=1");
+    $cnt->execute([$user_id]);
+    if ((int)$cnt->fetchColumn() >= DEVICE_MAX) {
+        $old = $db->prepare("SELECT id FROM user_sessions WHERE user_id=? AND is_active=1 ORDER BY last_active ASC LIMIT 1");
+        $old->execute([$user_id]);
+        if ($oid = $old->fetchColumn()) {
+            $db->prepare("UPDATE user_sessions SET is_active=0 WHERE id=?")->execute([$oid]);
+        }
+    }
+
+    $db->prepare(
+        "INSERT INTO user_sessions (user_id, token, device_fp, ip_address, user_agent) VALUES (?,?,?,?,?)"
+    )->execute([$user_id, $token, $fp, $ip, $ua]);
+
+    $_SESSION['_ds_token'] = $token;
+    $_SESSION['_ds_ping']  = time();
+}
+
+function validateDeviceSession(): void {
+    if (empty($_SESSION['_ds_token'])) return;
+
+    $db   = getDB();
+    $stmt = $db->prepare(
+        "SELECT id FROM user_sessions
+         WHERE token=? AND is_active=1
+           AND last_active > DATE_SUB(NOW(), INTERVAL ? SECOND)"
+    );
+    $stmt->execute([$_SESSION['_ds_token'], DEVICE_IDLE]);
+    $row = $stmt->fetch();
+
+    if (!$row) {
+        // Kicked by another login or session expired — force logout
+        logout();
+        header('Location: /index.php?ended=1');
+        exit;
+    }
+
+    // Throttled heartbeat: write to DB at most once per minute
+    if ((time() - ($_SESSION['_ds_ping'] ?? 0)) >= 60) {
+        $db->prepare("UPDATE user_sessions SET last_active=NOW() WHERE id=?")->execute([$row['id']]);
+        $_SESSION['_ds_ping'] = time();
+    }
+}
+
+function revokeDeviceSession(): void {
+    if (empty($_SESSION['_ds_token'])) return;
+    try {
+        getDB()->prepare("UPDATE user_sessions SET is_active=0 WHERE token=?")
+               ->execute([$_SESSION['_ds_token']]);
+    } catch (Throwable) {}
+    unset($_SESSION['_ds_token'], $_SESSION['_ds_ping']);
 }

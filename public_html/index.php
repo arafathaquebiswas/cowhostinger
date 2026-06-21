@@ -7,7 +7,14 @@ if (isLoggedIn()) {
     redirect(getRoleRedirect(currentRole()));
 }
 
-$error      = '';
+// Set device-tracking cookie early so it is available on the login POST
+_getOrCreateDeviceId();
+
+$error = '';
+if (!empty($_GET['ended'])) {
+    $error = 'Your session was ended because you signed in on another device.';
+}
+
 $tab        = $_GET['tab'] ?? 'email';    // 'email' or 'phone'
 $email      = '';
 $farm_code  = '';

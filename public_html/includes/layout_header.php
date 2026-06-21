@@ -84,8 +84,8 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
     .upgrade-plan-price{font-size:.75rem;color:#6B7280;margin-top:.15rem}
     .upgrade-modal-close{position:absolute;top:.75rem;right:.75rem;background:none;border:none;font-size:1.4rem;cursor:pointer;color:#9CA3AF;line-height:1}
     /* ── AB IT watermark ──────────────────────────────────────── */
-    .saas-watermark{position:fixed;top:50%;left:-30px;transform:translateY(-50%) rotate(90deg);font-size:4rem;font-weight:900;color:rgba(45,106,79,.05);pointer-events:none;z-index:1;letter-spacing:.1em;user-select:none;white-space:nowrap}
-    .abit-stamp{position:fixed;bottom:12px;left:14px;font-size:.65rem;font-weight:700;color:rgba(45,106,79,.4);letter-spacing:.08em;pointer-events:none;z-index:2;user-select:none}
+    .saas-watermark{position:fixed;top:50%;right:-30px;transform:translateY(-50%) rotate(90deg);font-size:4rem;font-weight:900;color:rgba(45,106,79,.05);pointer-events:none;z-index:1;letter-spacing:.1em;user-select:none;white-space:nowrap}
+    .abit-stamp{position:fixed;bottom:12px;right:14px;font-size:.65rem;font-weight:700;color:rgba(45,106,79,.4);letter-spacing:.08em;pointer-events:none;z-index:2;user-select:none}
     /* ── Usage meter ──────────────────────────────────────────── */
     .usage-meter{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin:.25rem 0 .1rem}
     .usage-meter-fill{height:100%;border-radius:3px;background:var(--primary);transition:.3s}
@@ -114,15 +114,33 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
     /* ══════════════════════════════════════════════════════════
        QUICK ACTION FAB
        ══════════════════════════════════════════════════════════ */
-    .qaf{position:fixed;bottom:1.2rem;right:1.2rem;z-index:7500;display:flex;flex-direction:column;align-items:flex-end;gap:.35rem}
-    .qaf-trigger{width:44px;height:44px;border-radius:50%;background:var(--success,#2D6A4F);color:#fff;border:none;font-size:1.3rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.28);transition:.2s;display:flex;align-items:center;justify-content:center;line-height:1}
-    .qaf-trigger:hover{transform:scale(1.08);box-shadow:0 6px 20px rgba(0,0,0,.35)}
-    .qaf.open .qaf-trigger{background:#dc2626;transform:rotate(45deg)}
-    .qaf-menu{display:none;flex-direction:column;gap:.3rem;align-items:flex-end;padding-bottom:.1rem}
-    .qaf.open .qaf-menu{display:flex}
-    .qaf-item{display:flex;align-items:center;gap:.45rem;padding:.38rem .7rem;background:#fff;border-radius:18px;text-decoration:none;color:#1f2937;font-size:.78rem;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.16);white-space:nowrap;transition:.15s;border:1px solid rgba(0,0,0,.05)}
-    .qaf-item:hover{background:#f0fdf4;color:var(--success,#2D6A4F);text-decoration:none;transform:translateX(-3px)}
-    .qaf-ico{font-size:.95rem;line-height:1}
+    .qaf{padding:.25rem .75rem .4rem;border-top:1px solid rgba(255,255,255,.1);display:flex;flex-direction:column;gap:.1rem}
+    .qaf-trigger{width:100%;border-radius:8px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.85);border:none;font-size:.83rem;font-weight:700;cursor:pointer;padding:.42rem .75rem;transition:.18s;display:flex;align-items:center;gap:.5rem;line-height:1}
+    .qaf-trigger:hover{background:rgba(255,255,255,.2);color:#fff}
+    .qaf-menu{display:none;flex-direction:column;gap:.05rem;padding:.1rem 0}
+    .qaf-panel-hdr,.qaf-cust-hdr{display:none;align-items:center;gap:.4rem;padding:.55rem .75rem .3rem}
+    .qaf-hdr-title{font-size:.8rem;font-weight:700;color:rgba(255,255,255,.9);letter-spacing:.03em}
+    .qaf-hdr-btn{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.65);border-radius:5px;padding:.22rem .38rem;cursor:pointer;display:flex;align-items:center;font-size:.72rem;line-height:1;transition:.15s}
+    .qaf-hdr-btn:hover{background:rgba(255,255,255,.22);color:#fff}
+    .qaf-hdr-done{background:rgba(45,106,79,.55);border:none;color:#fff;border-radius:5px;padding:.22rem .55rem;cursor:pointer;font-size:.72rem;font-weight:700;transition:.15s}
+    .qaf-hdr-done:hover{background:rgba(45,106,79,.85)}
+    .qaf-item{display:flex;align-items:center;gap:.45rem;padding:.36rem .65rem;border-radius:6px;text-decoration:none;color:rgba(255,255,255,.72);font-size:.8rem;font-weight:500;transition:.15s;white-space:nowrap}
+    .qaf-item:hover{background:rgba(255,255,255,.1);color:#fff;text-decoration:none}
+    .qaf-ico{font-size:.88rem;line-height:1;flex-shrink:0}
+    /* Open state — sidebar nav hides, QAF fills panel */
+    .sidebar.qaf-open .sidebar-nav{display:none !important}
+    .sidebar.qaf-open .qaf{flex:1;overflow-y:auto;padding:.25rem 0 .4rem;border-top:1px solid rgba(255,255,255,.1)}
+    .sidebar.qaf-open .qaf-trigger{display:none}
+    .sidebar.qaf-open .qaf-panel-hdr{display:flex}
+    .sidebar.qaf-open .qaf-menu{display:flex;padding:.15rem .75rem;flex:1}
+    /* Customize mode */
+    .qaf.customizing .qaf-panel-hdr{display:none}
+    .qaf.customizing .qaf-cust-hdr{display:flex}
+    .qaf-item .qaf-chk{width:15px;height:15px;border-radius:3px;border:1.5px solid rgba(255,255,255,.35);flex-shrink:0;display:none;align-items:center;justify-content:center;font-size:.6rem;transition:.15s}
+    .qaf.customizing .qaf-item .qaf-chk{display:flex}
+    .qaf.customizing .qaf-item{opacity:.5;cursor:pointer !important;pointer-events:auto !important}
+    .qaf.customizing .qaf-item.qaf-on{opacity:1}
+    .qaf.customizing .qaf-item.qaf-on .qaf-chk{background:#2D6A4F;border-color:#2D6A4F;color:#fff}
     </style>
     <script>
     // Accordion toggle with localStorage persistence
@@ -150,14 +168,83 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             });
         } catch(e){}
     });
-    // FAB toggle
+    // ── Quick Actions ─────────────────────────────────────────
+    var _qafBak = null;
+
     function toggleQAF() {
-        document.getElementById('qaf').classList.toggle('open');
+        var sb  = document.getElementById('sidebar');
+        var qaf = document.getElementById('qaf');
+        var opening = !sb.classList.contains('qaf-open');
+        if (opening) {
+            sb.classList.add('qaf-open');
+        } else {
+            sb.classList.remove('qaf-open');
+            qaf.classList.remove('customizing');
+            _qafBak = null;
+        }
     }
+
+    document.addEventListener('click', function(e) {
+        var sb = document.getElementById('sidebar');
+        if (sb && sb.classList.contains('qaf-open') && !sb.contains(e.target)) {
+            sb.classList.remove('qaf-open');
+            document.getElementById('qaf').classList.remove('customizing');
+            _qafBak = null;
+        }
+    });
+
+    function _qafGetHidden() {
+        try { return JSON.parse(localStorage.getItem('qaf_hidden') || '[]'); } catch(e) { return []; }
+    }
+
+    function qafApplyPrefs() {
+        var hidden = _qafGetHidden();
+        document.querySelectorAll('.qaf-item[data-qaf-id]').forEach(function(el) {
+            el.style.display = hidden.indexOf(el.dataset.qafId) !== -1 ? 'none' : '';
+        });
+    }
+
+    function qafStartCustomize() {
+        var hidden = _qafGetHidden();
+        _qafBak = hidden.slice();
+        document.querySelectorAll('.qaf-item[data-qaf-id]').forEach(function(el) {
+            el.style.display = '';
+            el.classList.toggle('qaf-on', hidden.indexOf(el.dataset.qafId) === -1);
+        });
+        document.getElementById('qaf').classList.add('customizing');
+    }
+
+    function _qafItemClick(e) {
+        e.preventDefault();
+        this.classList.toggle('qaf-on');
+    }
+
     document.addEventListener('click', function(e) {
         var qaf = document.getElementById('qaf');
-        if (qaf && !qaf.contains(e.target)) qaf.classList.remove('open');
-    });
+        if (qaf && qaf.classList.contains('customizing')) {
+            var item = e.target.closest('.qaf-item[data-qaf-id]');
+            if (item) { e.preventDefault(); item.classList.toggle('qaf-on'); }
+        }
+    }, true);
+
+    function qafSave() {
+        var hidden = [];
+        document.querySelectorAll('.qaf-item[data-qaf-id]').forEach(function(el) {
+            if (!el.classList.contains('qaf-on')) hidden.push(el.dataset.qafId);
+        });
+        localStorage.setItem('qaf_hidden', JSON.stringify(hidden));
+        document.getElementById('qaf').classList.remove('customizing');
+        _qafBak = null;
+        qafApplyPrefs();
+    }
+
+    function qafCancel() {
+        document.getElementById('qaf').classList.remove('customizing');
+        _qafBak = null;
+        qafApplyPrefs();
+    }
+
+    qafApplyPrefs();
     </script>
 </head>
 <body data-nav="<?= e($active_nav ?? '') ?>">
@@ -515,6 +602,48 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
 
         </nav>
 
+        <!-- Quick Actions -->
+        <div class="qaf" id="qaf">
+            <!-- Normal panel header (shown when open) -->
+            <div class="qaf-panel-hdr">
+                <span class="qaf-hdr-title">⚡ Quick Actions</span>
+                <button class="qaf-hdr-btn" onclick="qafStartCustomize()" title="Customize" style="margin-left:auto">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                </button>
+                <button class="qaf-hdr-btn" onclick="toggleQAF()" title="Close">✕</button>
+            </div>
+            <!-- Customize header -->
+            <div class="qaf-cust-hdr">
+                <span class="qaf-hdr-title">✏ Customize</span>
+                <button class="qaf-hdr-done" onclick="qafSave()" style="margin-left:auto">Done</button>
+                <button class="qaf-hdr-btn" onclick="qafCancel()">Cancel</button>
+            </div>
+            <!-- Action items -->
+            <div class="qaf-menu">
+                <?php if ($_can(['admin','worker','veterinarian']) && $_module_enabled('milk')): ?>
+                <a href="/modules/milk/record.php" class="qaf-item" data-qaf-id="milk"><span class="qaf-chk">✓</span><span class="qaf-ico">🥛</span> Add Milk</a>
+                <?php endif; ?>
+                <?php if ($_can(['admin','worker','accountant']) && $_module_enabled('feed_medicine')): ?>
+                <a href="/modules/feed_medicine/feed_log.php" class="qaf-item" data-qaf-id="feed"><span class="qaf-chk">✓</span><span class="qaf-ico">🌾</span> Add Feed</a>
+                <?php endif; ?>
+                <?php if ($_can(['admin','manager','veterinarian','worker'])): ?>
+                <a href="/modules/treatments/form.php" class="qaf-item" data-qaf-id="treatment"><span class="qaf-chk">✓</span><span class="qaf-ico">💊</span> Add Treatment</a>
+                <?php endif; ?>
+                <?php if ($_can(['admin']) && $_module_enabled('cows')): ?>
+                <a href="/modules/cows/form.php" class="qaf-item" data-qaf-id="cow"><span class="qaf-chk">✓</span><span class="qaf-ico">🐄</span> Add Cow</a>
+                <?php endif; ?>
+                <?php if ($_can(['admin','accountant']) && $_module_enabled('sales')): ?>
+                <a href="/modules/sales/buyers.php" class="qaf-item" data-qaf-id="buyer"><span class="qaf-chk">✓</span><span class="qaf-ico">🛒</span> Add Buyer</a>
+                <?php endif; ?>
+                <?php if ($_can(['worker'])): ?>
+                <a href="/modules/workers/my_tasks.php" class="qaf-item" data-qaf-id="tasks"><span class="qaf-chk">✓</span><span class="qaf-ico">✅</span> My Tasks</a>
+                <?php endif; ?>
+            </div>
+            <button class="qaf-trigger" onclick="toggleQAF()" title="Quick actions" aria-label="Quick actions">
+                <span style="font-size:1rem;line-height:1">+</span> Quick Actions
+            </button>
+        </div>
+
         <div class="sidebar-footer">
             <div class="sidebar-user">
                 <div class="sidebar-avatar"><?= e($_layout_initials) ?></div>
@@ -530,47 +659,6 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             </div>
         </div>
     </aside>
-
-    <!-- ══════════════════════════════════════════════════════════
-         ⚡ QUICK ACTION FAB — role-aware shortcuts
-         ══════════════════════════════════════════════════════════ -->
-    <div class="qaf" id="qaf">
-        <div class="qaf-menu">
-            <?php if ($_can(['admin','worker','veterinarian']) && $_module_enabled('milk')): ?>
-            <a href="/modules/milk/record.php" class="qaf-item">
-                <span class="qaf-ico">🥛</span> Add Milk
-            </a>
-            <?php endif; ?>
-            <?php if ($_can(['admin','worker','accountant']) && $_module_enabled('feed_medicine')): ?>
-            <a href="/modules/feed_medicine/feed_log.php" class="qaf-item">
-                <span class="qaf-ico">🌾</span> Add Feed
-            </a>
-            <?php endif; ?>
-            <?php if ($_can(['admin','manager','veterinarian','worker'])): ?>
-            <a href="/modules/treatments/form.php" class="qaf-item">
-                <span class="qaf-ico">💊</span> Add Treatment
-            </a>
-            <?php endif; ?>
-            <?php if ($_can(['admin']) && $_module_enabled('cows')): ?>
-            <a href="/modules/cows/form.php" class="qaf-item">
-                <span class="qaf-ico">🐄</span> Add Cow
-            </a>
-            <?php endif; ?>
-            <?php if ($_can(['admin','accountant']) && $_module_enabled('sales')): ?>
-            <a href="/modules/sales/buyers.php" class="qaf-item">
-                <span class="qaf-ico">🛒</span> Add Buyer
-            </a>
-            <?php endif; ?>
-            <?php if ($_can(['worker'])): ?>
-            <a href="/modules/workers/my_tasks.php" class="qaf-item">
-                <span class="qaf-ico">✅</span> My Tasks
-            </a>
-            <?php endif; ?>
-        </div>
-        <button class="qaf-trigger" onclick="toggleQAF()" title="Quick actions" aria-label="Quick actions">
-            +
-        </button>
-    </div>
 
     <!-- ══════════════════════════════════════════════════════════
          📱 BOTTOM NAVIGATION — Mobile ≤600px only

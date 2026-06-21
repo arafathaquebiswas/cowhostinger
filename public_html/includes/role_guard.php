@@ -13,6 +13,8 @@ function requireAuth(): void {
         redirect('/index.php');
     }
 
+    validateDeviceSession();
+
     // Session timeout
     if (isset($_SESSION['login_time']) && (time() - $_SESSION['login_time']) > SESSION_LIFETIME) {
         logout();
