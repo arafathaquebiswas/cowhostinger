@@ -19,6 +19,10 @@ function isSuperAdmin(): bool {
     return ($_SESSION['user_role'] ?? '') === 'superadmin';
 }
 
+// ── RBAC + Activity logger (auto-loaded here so every page gets them) ─────────
+require_once __DIR__ . '/rbac.php';
+require_once __DIR__ . '/activity_logger.php';
+
 // ── Impersonation (CEO login-as a farm) ───────────────────────────────────────
 
 function isImpersonating(): bool {
@@ -34,7 +38,9 @@ function impersonatingFarmId(): ?int {
 
 function requireFarmScope(): void {
     requireAuth();
-    if (!isSuperAdmin() && currentFarmId() === null) {
+    // CEO and support staff are org-level users — no farm_id required
+    if (isSuperAdmin() || isSupportStaff()) return;
+    if (currentFarmId() === null) {
         flashMessage('error', 'Your account is not linked to a farm. Please contact support.');
         redirect('/index.php');
     }

@@ -23,6 +23,15 @@ function canAccess(string $feature): bool {
     // CEO without impersonation has unconditional full access
     if (isSuperAdmin() && !isImpersonating()) return true;
 
+    // Support staff are org-level users — not subject to farm subscription gates.
+    // Their access is governed entirely by RBAC (hasPermission).
+    if (isSupportStaff()) {
+        // Allow read-only farm features; block all mutations and paid features
+        return str_ends_with($feature, '.view')
+            || str_ends_with($feature, '.list')
+            || in_array($feature, ['ticket.view', 'ticket.respond', 'ticket.create', 'alert.view', 'dashboard.view'], true);
+    }
+
     $sub = getSubscription();
 
     // ── Blocked state (expired or suspended) ──────────────────────────────────

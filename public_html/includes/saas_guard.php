@@ -16,7 +16,7 @@
 
 // ── Bootstrap chain (idempotent includes) ─────────────────────────────────────
 
-if (!defined('AUTH_LOADED'))           require_once __DIR__ . '/auth.php';
+if (!function_exists('requireRole'))   require_once __DIR__ . '/role_guard.php';
 if (!function_exists('isSuperAdmin'))  require_once __DIR__ . '/farm_guard.php';
 if (!function_exists('getSubscription')) require_once __DIR__ . '/subscription_engine.php';
 if (!function_exists('canAccess'))     require_once __DIR__ . '/access_control.php';

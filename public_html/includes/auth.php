@@ -216,13 +216,14 @@ function hasRole(array $roles): bool {
 
 function getRoleRedirect(string $role): string {
     return match ($role) {
-        'superadmin'   => '/modules/super_admin/index.php',
-        'admin'        => '/dashboard.php',
-        'worker'       => '/modules/workers/my_tasks.php',
-        'accountant'   => '/modules/finance/index.php',
-        'veterinarian' => '/modules/cows/index.php',
-        'reception'    => '/modules/cows/index.php',
-        'user'         => '/user_dashboard.php',
-        default        => '/index.php',
+        'superadmin'    => '/modules/super_admin/dashboard.php',
+        'support_staff' => '/modules/support/dashboard.php',
+        'admin'         => '/dashboard.php',
+        'worker'        => '/modules/workers/my_tasks.php',
+        'accountant'    => '/modules/finance/index.php',
+        'veterinarian'  => '/modules/cows/index.php',
+        'reception'     => '/modules/cows/index.php',
+        'user'          => '/user_dashboard.php',
+        default         => '/index.php',
     };
 }

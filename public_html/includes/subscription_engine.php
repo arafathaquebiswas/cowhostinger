@@ -12,17 +12,16 @@
 // ── Internal state builder ────────────────────────────────────────────────────
 
 function _subEngine(): array {
-    static $state = null;
-    if ($state !== null) return $state;
+    if (isset($GLOBALS['_sub_engine_cache'])) return $GLOBALS['_sub_engine_cache'];
 
     // CEO without impersonation → fully unlimited, no restrictions
     if (isSuperAdmin() && !isImpersonating()) {
-        return $state = _subUnlimited();
+        return $GLOBALS['_sub_engine_cache'] = _subUnlimited();
     }
 
     $fid = fid();
     if (!$fid) {
-        return $state = _subFree();
+        return $GLOBALS['_sub_engine_cache'] = _subFree();
     }
 
     try {
@@ -47,11 +46,11 @@ function _subEngine(): array {
         $data = $stmt->fetch();
     } catch (\Throwable $e) {
         error_log('[SUB_ENGINE] ' . $e->getMessage());
-        return $state = _subFree();
+        return $GLOBALS['_sub_engine_cache'] = _subFree();
     }
 
     if (!$data || !$data['sub_id']) {
-        return $state = _subFree($data['farm_status'] ?? 'active');
+        return $GLOBALS['_sub_engine_cache'] = _subFree($data['farm_status'] ?? 'active');
     }
 
     $today      = date('Y-m-d');
@@ -93,7 +92,7 @@ function _subEngine(): array {
     $is_suspended = $sub_status === 'suspended';
     $is_blocked   = $is_expired || $is_suspended;
 
-    return $state = [
+    return $GLOBALS['_sub_engine_cache'] = [
         // Plan identity
         'plan_id'          => (int)($data['plan_id']       ?? 0),
         'name'             => $data['name']                 ?? 'Free',
@@ -204,12 +203,17 @@ function _platformSetting(string $key): ?string {
         $s = getDB()->prepare("SELECT value FROM platform_settings WHERE `key`=? LIMIT 1");
         $s->execute([$key]);
         return $cache[$key] = (($v = $s->fetchColumn()) !== false) ? (string)$v : null;
-    } catch (\Throwable $e) {
+    } catch (\Throwable) {
         return $cache[$key] = null;
     }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
+
+/** Flush the per-request cache — call after recording a payment or status change. */
+function _subEngineFlush(): void {
+    unset($GLOBALS['_sub_engine_cache']);
+}
 
 /** Full subscription state for the current farm. Cached per request. */
 function getSubscription(): array { return _subEngine(); }

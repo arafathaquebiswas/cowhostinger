@@ -150,6 +150,30 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
 
         <nav class="sidebar-nav">
 
+        <?php if (isSupportStaff()): ?>
+            <!-- Support Staff Navigation -->
+            <span class="nav-section-label">Support</span>
+            <a href="/modules/support/dashboard.php" class="nav-item<?= $_nav_active('support_dashboard') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Dashboard
+            </a>
+            <a href="/modules/support/index.php" class="nav-item<?= $_nav_active('support') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                Tickets
+                <?php
+                $_supp_open = (int)(getDB()->query("SELECT COUNT(*) FROM support_tickets WHERE assigned_to={$_layout_user['id']} AND status IN ('open','in_progress')")->fetchColumn() ?? 0);
+                if ($_supp_open > 0):
+                ?>
+                <span class="nav-badge"><?= $_supp_open ?></span>
+                <?php endif; ?>
+            </a>
+            <span class="nav-section-label">Tools</span>
+            <a href="/modules/support/dashboard.php#farm-search" class="nav-item">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Farm Search
+            </a>
+        <?php else: ?>
+
             <!-- Overview -->
             <span class="nav-section-label">Overview</span>
             <a href="/dashboard.php" class="nav-item<?= $_nav_active('dashboard') ?>">
@@ -277,8 +301,16 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 <?php endif; ?>
             </a>
 
+            <!-- Support Tickets (farm users only) -->
+            <?php if ($_can(['admin','accountant','veterinarian','reception'])): ?>
+            <a href="/modules/support/index.php" class="nav-item<?= $_nav_active('support') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                Support
+            </a>
+            <?php endif; ?>
+
             <!-- Subscription (farm users only) -->
-            <?php if ($_layout_role !== 'superadmin'): ?>
+            <?php if (!isSaasUser()): ?>
             <a href="/modules/subscription/index.php" class="nav-item<?= $_nav_active('subscription') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                 Subscription <?= farmPlanBadge() ?>
@@ -288,6 +320,10 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
             <!-- Super Admin -->
             <?php if ($_layout_role === 'superadmin'): ?>
             <span class="nav-section-label">Super Admin</span>
+            <a href="/modules/super_admin/dashboard.php" class="nav-item<?= $_nav_active('ceo_dashboard') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                CEO Dashboard
+            </a>
             <a href="/modules/super_admin/index.php" class="nav-item<?= $_nav_active('super_admin') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 All Farms
@@ -295,6 +331,14 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
             <a href="/modules/super_admin/revenue.php" class="nav-item<?= $_nav_active('revenue') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
                 Revenue
+            </a>
+            <a href="/modules/support/index.php" class="nav-item<?= $_nav_active('support') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                Tickets
+            </a>
+            <a href="/modules/admin/employees.php" class="nav-item<?= $_nav_active('employees') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                AB IT Team
             </a>
             <?php endif; ?>
 
@@ -314,6 +358,8 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 Audit Log
             </a>
             <?php endif; ?>
+
+        <?php endif; /* end support_staff else */ ?>
 
         </nav>
 

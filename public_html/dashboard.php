@@ -2,13 +2,10 @@
 require_once __DIR__ . '/includes/role_guard.php';
 requireAuth();
 
-// Public users have their own dashboard
-if (hasRole(['user'])) {
-    redirect('/user_dashboard.php');
-}
-if (hasRole(['superadmin'])) {
-    redirect('/modules/super_admin/index.php');
-}
+// Route org-level users to their own dashboards
+if (hasRole(['user']))          redirect('/user_dashboard.php');
+if (hasRole(['superadmin']))    redirect('/modules/super_admin/dashboard.php');
+if (hasRole(['support_staff'])) redirect('/modules/support/dashboard.php');
 
 $page_title = 'Dashboard';
 $active_nav = 'dashboard';
