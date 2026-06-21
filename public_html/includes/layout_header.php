@@ -160,7 +160,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
     });
     </script>
 </head>
-<body>
+<body data-nav="<?= e($active_nav ?? '') ?>">
 <div class="saas-watermark">AB IT</div>
 <div class="abit-stamp">AB IT</div>
 
@@ -199,7 +199,11 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <aside class="sidebar" id="sidebar">
-        <a href="/dashboard.php" class="sidebar-brand">
+        <!-- Collapse toggle (desktop only) -->
+        <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Collapse sidebar" aria-label="Collapse sidebar">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <a href="<?= isSaasUser() ? '/modules/super_admin/dashboard.php' : '/dashboard.php' ?>" class="sidebar-brand">
             <div class="sidebar-brand-icon">🐄</div>
             <span class="sidebar-brand-text">
                 <?= e($_layout_farm_name) ?>
@@ -568,7 +572,77 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
         </button>
     </div>
 
-    <div class="main-content">
+    <!-- ══════════════════════════════════════════════════════════
+         📱 BOTTOM NAVIGATION — Mobile ≤600px only
+         ══════════════════════════════════════════════════════════ -->
+    <nav class="bottom-nav" id="bottomNav" aria-label="Mobile navigation">
+        <?php
+        $bn_home = isSaasUser() ? '/modules/super_admin/dashboard.php' : (hasRole(['worker']) ? '/modules/workers/my_tasks.php' : '/dashboard.php');
+        ?>
+        <a href="<?= e($bn_home) ?>" class="bottom-nav-item" data-page="dashboard,my_tasks,ceo_dashboard">
+            <span class="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </span>
+            <span class="bn-label"><?= hasRole(['worker']) ? 'Tasks' : 'Home' ?></span>
+        </a>
+
+        <?php if (!isSaasUser() && $_module_enabled('cows')): ?>
+        <a href="/modules/cows/index.php" class="bottom-nav-item" data-page="cows,cow_form,cow_view">
+            <span class="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="13" rx="8" ry="6"/><path d="M8 13c0-2.5 1-5 4-5s4 2.5 4 5"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/><path d="M7 7c-1-2-1-4 1-4M17 7c1-2 1-4-1-4"/></svg>
+            </span>
+            <span class="bn-label">Cows</span>
+        </a>
+        <?php elseif (isSaasUser()): ?>
+        <a href="/modules/super_admin/index.php" class="bottom-nav-item" data-page="super_admin">
+            <span class="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+            </span>
+            <span class="bn-label">Farms</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if ($_can(['admin','manager','worker','veterinarian']) && $_module_enabled('milk')): ?>
+        <a href="/modules/milk/index.php" class="bottom-nav-item" data-page="milk,milk_analytics">
+            <span class="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8l2 6H6L8 2z"/><path d="M6 8v12a2 2 0 002 2h8a2 2 0 002-2V8"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+            </span>
+            <span class="bn-label">Milk</span>
+        </a>
+        <?php elseif (isSaasUser()): ?>
+        <a href="/modules/super_admin/revenue.php" class="bottom-nav-item" data-page="revenue">
+            <span class="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+            </span>
+            <span class="bn-label">Revenue</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if ($_can(['admin','manager','accountant'])): ?>
+        <a href="/modules/finance/index.php" class="bottom-nav-item" data-page="finance,profit_engine">
+            <span class="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </span>
+            <span class="bn-label">Finance</span>
+        </a>
+        <?php elseif (isSaasUser()): ?>
+        <a href="/modules/support/index.php" class="bottom-nav-item" data-page="support">
+            <span class="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </span>
+            <span class="bn-label">Support</span>
+        </a>
+        <?php endif; ?>
+
+        <button class="bottom-nav-item" id="bnMenuBtn" onclick="document.getElementById('menuToggle').click()" aria-label="Open menu">
+            <span class="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </span>
+            <span class="bn-label">Menu</span>
+        </button>
+    </nav>
+
+    <div class="main-content" id="mainContent">
         <header class="topbar">
             <button class="menu-toggle" id="menuToggle" aria-label="Toggle sidebar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -203,7 +203,7 @@ $trend = buildTrend($db);
 
 // ── Per-cow profitability (this month) ────────────────────────────────────────
 $cow_stmt = $db->prepare(
-    "SELECT c.id, c.tag_number, c.name AS cow_name,
+    "SELECT c.id, c.tag_number, c.breed AS cow_name,
         COALESCE(SUM(mr.milk_value),0) AS milk_rev,
         COALESCE((SELECT SUM(fl.total_cost) FROM feed_logs fl WHERE fl.cow_id=c.id AND ".farmFilter('fl')." AND fl.feed_date BETWEEN ? AND ?),0) AS feed_cost,
         COALESCE((SELECT SUM(ml.total_cost) FROM medicine_logs ml WHERE ml.cow_id=c.id AND ".farmFilter('ml')." AND ml.administered_at BETWEEN ? AND ?),0) AS med_cost,
@@ -212,7 +212,7 @@ $cow_stmt = $db->prepare(
     FROM cows c
     LEFT JOIN milk_records mr ON mr.cow_id=c.id AND ".farmFilter('mr')." AND mr.contamination_flag=0 AND DATE(mr.recorded_at) BETWEEN ? AND ?
     WHERE ".farmFilter('c')."
-    GROUP BY c.id,c.tag_number,c.name
+    GROUP BY c.id,c.tag_number,c.breed
     HAVING milk_rev>0 OR feed_cost>0 OR med_cost>0 OR treat_cost>0 OR vet_cost>0
     ORDER BY (milk_rev-feed_cost-med_cost-treat_cost-vet_cost) DESC LIMIT 30"
 );
