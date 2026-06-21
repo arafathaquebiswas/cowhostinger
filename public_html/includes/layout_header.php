@@ -185,7 +185,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <div class="upgrade-plan-card"><div class="upgrade-plan-name">Pro</div><div class="upgrade-plan-price">৳999/mo</div></div>
             <div class="upgrade-plan-card"><div class="upgrade-plan-name">Enterprise</div><div class="upgrade-plan-price">৳2499/mo</div></div>
         </div>
-        <a href="/modules/subscription/index.php" class="btn btn-primary btn-block" style="background:linear-gradient(135deg,#7C3AED,#A855F7);border:none">
+        <a href="/modules/subscription/index.php" class="btn btn-upgrade btn-block">
             View Plans &amp; Upgrade
         </a>
         <p style="font-size:.75rem;color:#9CA3AF;margin:.75rem 0 0">Contact AB IT: <strong>support@abit.com.bd</strong></p>
@@ -372,7 +372,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  📊  FINANCE & REPORTS
                  ══════════════════════════════════════════════════ -->
             <?php if ($_can(['admin','accountant'])): ?>
-            <div class="nav-acc<?= $_acc(['finance','finance_charts','reports']) ?>" id="nacc-finance">
+            <div class="nav-acc<?= $_acc(['finance','finance_charts','reports','profit_engine','profitability']) ?>" id="nacc-finance">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-finance')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                     Finance &amp; Reports
@@ -380,7 +380,8 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 </button>
                 <div class="nav-acc-body">
                     <?php if ($_module_enabled('finance') && canAccess('finance.view')): ?>
-                    <a href="/modules/finance/index.php" class="nav-item<?= $_nav_active('finance') ?>">Finance</a>
+                    <a href="/modules/finance/profit.php" class="nav-item<?= $_nav_active('profit_engine') ?>">Financial Intelligence</a>
+                    <a href="/modules/finance/index.php" class="nav-item<?= $_nav_active('finance') ?>">Finance Ledger</a>
                     <a href="/modules/finance/charts.php" class="nav-item<?= $_nav_active('finance_charts') ?>">Finance Charts</a>
                     <?php else: ?>
                     <?= lockedNavItem('Finance', '', 'Finance module') ?>

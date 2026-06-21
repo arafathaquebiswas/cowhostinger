@@ -709,7 +709,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary btn-sm" id="f_submit_btn" style="background:var(--success);border-color:var(--success)">🌾 Save Feed Entry</button>
+            <button type="submit" class="btn btn-success btn-sm" id="f_submit_btn">🌾 Save Feed Entry</button>
         </form>
 
         <!-- ════════════════════ MEDICINE FORM ════════════════════ -->
@@ -835,7 +835,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <input type="text" name="notes_med" class="form-control" maxlength="255" placeholder="Optional — symptoms, treatment reason…">
             </div>
 
-            <button type="submit" class="btn btn-primary btn-sm" id="m_submit_btn" style="background:#7C3AED;border-color:#7C3AED">💊 Save Medicine Entry</button>
+            <button type="submit" class="btn btn-purple btn-sm" id="m_submit_btn">💊 Save Medicine Entry</button>
         </form>
         <?php endif; ?>
 
@@ -883,7 +883,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <a href="?from=<?= urlencode($filter_from) ?>&to=<?= urlencode($filter_to) ?>&cow_id=<?= $filter_cow ?>&tab=feed"
                        class="btn btn-sm <?= $active_tab === 'feed' ? 'btn-primary' : 'btn-secondary' ?>">🌾 Feed</a>
                     <a href="?from=<?= urlencode($filter_from) ?>&to=<?= urlencode($filter_to) ?>&cow_id=<?= $filter_cow ?>&tab=medicine"
-                       class="btn btn-sm <?= $active_tab === 'medicine' ? 'btn-primary' : 'btn-secondary' ?>" style="<?= $active_tab === 'medicine' ? 'background:#7C3AED;border-color:#7C3AED' : '' ?>">💊 Medicine</a>
+                       class="btn btn-sm <?= $active_tab === 'medicine' ? 'btn-purple' : 'btn-secondary' ?>">💊 Medicine</a>
                     <a href="?from=<?= urlencode($filter_from) ?>&to=<?= urlencode($filter_to) ?>&cow_id=<?= $filter_cow ?>&tab=batches"
                        class="btn btn-sm <?= $active_tab === 'batches' ? 'btn-primary' : 'btn-secondary' ?>">📦 Batches</a>
                 </div>
@@ -1134,8 +1134,7 @@ function setFeedMode(mode) {
     });
     var btn = document.getElementById('f_submit_btn');
     btn.textContent = mode === 'all' ? '🌾 Apply to All ' + _cowCount + ' Cows' : '🌾 Save Feed Entry';
-    btn.style.background = mode === 'all' ? '#dc2626' : 'var(--success)';
-    btn.style.borderColor = mode === 'all' ? '#dc2626' : 'var(--success)';
+    btn.className = 'btn btn-sm ' + (mode === 'all' ? 'btn-danger' : 'btn-success');
     calcFeedSummary();
 }
 
@@ -1165,8 +1164,7 @@ function setMedMode(mode) {
     var btn = document.getElementById('m_submit_btn');
     if (btn) {
         btn.textContent = mode === 'all' ? '💊 Administer to All ' + _cowCount + ' Cows' : '💊 Save Medicine Entry';
-        btn.style.background = mode === 'all' ? '#dc2626' : '#7C3AED';
-        btn.style.borderColor = mode === 'all' ? '#dc2626' : '#7C3AED';
+        btn.className = 'btn btn-sm ' + (mode === 'all' ? 'btn-danger' : 'btn-purple');
     }
     calcMedSummary();
 }
