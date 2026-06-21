@@ -188,6 +188,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <p style="text-align:center;margin-top:1.25rem;font-size:.85rem;color:var(--text-secondary)">
+            <a href="/forgot_password.php" style="font-weight:600">Forgot password?</a>
+            &nbsp;·&nbsp;
             New farmer?
             <a href="/register.php" style="font-weight:600">Register your farm</a>
             &nbsp;·&nbsp;
