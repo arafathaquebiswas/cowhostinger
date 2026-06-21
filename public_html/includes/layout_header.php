@@ -22,6 +22,9 @@ $_layout_expiry_html = farmExpiryBanner();
 $_layout_is_free     = $_layout_plan['is_free'] ?? true;
 $_layout_is_blocked  = $_layout_plan['is_blocked'] ?? false;
 
+// Subscription expiry alert engine — throttled, farm-admin only
+require_once __DIR__ . '/expiry_checker.php';
+
 $_nav_active = function (string $key) use ($active_nav): string {
     return (($active_nav ?? '') === $key) ? ' active' : '';
 };
@@ -372,7 +375,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  📊  FINANCE & REPORTS
                  ══════════════════════════════════════════════════ -->
             <?php if ($_can(['admin','accountant'])): ?>
-            <div class="nav-acc<?= $_acc(['finance','finance_charts','reports','profit_engine','profitability']) ?>" id="nacc-finance">
+            <div class="nav-acc<?= $_acc(['finance','finance_charts','reports','profit_engine','profit_monthly','profit_yearly','profit_compare','profitability']) ?>" id="nacc-finance">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-finance')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                     Finance &amp; Reports
@@ -380,7 +383,10 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 </button>
                 <div class="nav-acc-body">
                     <?php if ($_module_enabled('finance') && canAccess('finance.view')): ?>
-                    <a href="/modules/finance/profit.php" class="nav-item<?= $_nav_active('profit_engine') ?>">Financial Intelligence</a>
+                    <a href="/modules/finance/profit.php" class="nav-item<?= $_nav_active('profit_engine') ?>">Financial Overview</a>
+                    <a href="/modules/finance/profit.php?tab=compare&amp;preset=monthly" class="nav-item<?= $_nav_active('profit_monthly') ?>">Monthly Comparison</a>
+                    <a href="/modules/finance/profit.php?tab=compare&amp;preset=yearly"  class="nav-item<?= $_nav_active('profit_yearly') ?>">Yearly Comparison</a>
+                    <a href="/modules/finance/profit.php?tab=compare" class="nav-item<?= $_nav_active('profit_compare') ?>">Custom Comparison</a>
                     <a href="/modules/finance/index.php" class="nav-item<?= $_nav_active('finance') ?>">Finance Ledger</a>
                     <a href="/modules/finance/charts.php" class="nav-item<?= $_nav_active('finance_charts') ?>">Finance Charts</a>
                     <?php else: ?>
@@ -457,7 +463,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  ══════════════════════════════════════════════════ -->
             <?php if ($_layout_role === 'superadmin'): ?>
             <?php $_pending_payments=(int)(getDB()->query("SELECT COUNT(*) FROM payments WHERE status='pending'")->fetchColumn()??0); ?>
-            <div class="nav-acc<?= $_acc(['ceo_dashboard','super_admin','revenue','payments','employees']) ?>" id="nacc-sadmin">
+            <div class="nav-acc<?= $_acc(['ceo_control','ceo_sub_mgr','ceo_audit','ceo_plans','ceo_dashboard','super_admin','revenue','payments','employees']) ?>" id="nacc-sadmin">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-sadmin')" style="color:rgba(200,170,255,.75)">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     Super Admin
@@ -467,15 +473,36 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <span class="nav-acc-chv" style="<?= $_pending_payments > 0 ? 'margin-left:0' : '' ?>">›</span>
                 </button>
                 <div class="nav-acc-body">
-                    <a href="/modules/super_admin/dashboard.php" class="nav-item<?= $_nav_active('ceo_dashboard') ?>">CEO Dashboard</a>
-                    <a href="/modules/super_admin/index.php"     class="nav-item<?= $_nav_active('super_admin') ?>">All Farms</a>
-                    <a href="/modules/super_admin/revenue.php"   class="nav-item<?= $_nav_active('revenue') ?>">Revenue</a>
-                    <a href="/modules/super_admin/payments.php"  class="nav-item<?= $_nav_active('payments') ?>">
+                    <div style="padding:.35rem .9rem .1rem;font-size:.68rem;font-weight:700;color:rgba(167,139,250,.8);text-transform:uppercase;letter-spacing:.08em">CEO Control Center</div>
+                    <a href="/modules/ceo/index.php"         class="nav-item<?= $_nav_active('ceo_control') ?>" style="padding-left:1.4rem">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.7"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        Control Center
+                    </a>
+                    <a href="/modules/ceo/subscriptions.php" class="nav-item<?= $_nav_active('ceo_sub_mgr') ?>" style="padding-left:1.4rem">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.7"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        Subscription Manager
+                    </a>
+                    <a href="/modules/ceo/subscriptions.php?status=lifetime" class="nav-item<?= ($_nav_active('ceo_sub_mgr') && ($_GET['status']??'')==='lifetime') ? ' active' : '' ?>" style="padding-left:1.4rem">
+                        <span style="font-size:.75rem;opacity:.7">♾</span> Lifetime Members
+                    </a>
+                    <a href="/modules/ceo/plans.php"         class="nav-item<?= $_nav_active('ceo_plans') ?>" style="padding-left:1.4rem">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.7"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                        Plans &amp; Pricing
+                    </a>
+                    <a href="/modules/ceo/audit.php"         class="nav-item<?= $_nav_active('ceo_audit') ?>" style="padding-left:1.4rem">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.7"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        CEO Audit Logs
+                    </a>
+                    <div style="padding:.35rem .9rem .1rem;margin-top:.25rem;font-size:.68rem;font-weight:700;color:rgba(167,139,250,.8);text-transform:uppercase;letter-spacing:.08em">System</div>
+                    <a href="/modules/super_admin/dashboard.php" class="nav-item<?= $_nav_active('ceo_dashboard') ?>" style="padding-left:1.4rem">CEO Dashboard</a>
+                    <a href="/modules/super_admin/index.php"     class="nav-item<?= $_nav_active('super_admin') ?>" style="padding-left:1.4rem">All Farms</a>
+                    <a href="/modules/super_admin/revenue.php"   class="nav-item<?= $_nav_active('revenue') ?>" style="padding-left:1.4rem">Revenue</a>
+                    <a href="/modules/super_admin/payments.php"  class="nav-item<?= $_nav_active('payments') ?>" style="padding-left:1.4rem">
                         Payments
                         <?php if ($_pending_payments > 0): ?><span class="nav-badge"><?= min($_pending_payments,99) ?></span><?php endif; ?>
                     </a>
-                    <a href="/modules/support/index.php"    class="nav-item<?= $_nav_active('support') ?>">Tickets</a>
-                    <a href="/modules/admin/employees.php"  class="nav-item<?= $_nav_active('employees') ?>">AB IT Team</a>
+                    <a href="/modules/support/index.php"    class="nav-item<?= $_nav_active('support') ?>" style="padding-left:1.4rem">Tickets</a>
+                    <a href="/modules/admin/employees.php"  class="nav-item<?= $_nav_active('employees') ?>" style="padding-left:1.4rem">AB IT Team</a>
                 </div>
             </div>
             <?php endif; ?>
