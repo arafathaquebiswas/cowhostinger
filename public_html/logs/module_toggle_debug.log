@@ -22,3 +22,36 @@
 [2026-06-20 11:23:29] AJAX toggle — module=reports before=0 after=1 user_id=1 ip=127.0.0.1
 [2026-06-20 12:21:08] AJAX toggle — module=milk before=1 after=0 user_id=1 ip=127.0.0.1
 [2026-06-20 16:36:52] AJAX toggle — module=milk before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:55:38] AJAX toggle — module=milk before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:55:41] Batch save by user_id=1: alerts=1, breeding=1, cows=1, diagnosis=1, equipment=1, feed_medicine=1, finance=1, maintenance=1, milk=0, reports=1, sales=1, workers=1
+[2026-06-21 03:55:54] AJAX toggle — module=workers before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:55:57] Batch save by user_id=1: alerts=1, breeding=1, cows=1, diagnosis=1, equipment=1, feed_medicine=1, finance=1, maintenance=1, milk=0, reports=1, sales=1, workers=0
+[2026-06-21 03:56:02] AJAX toggle — module=feed_medicine before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:04] Batch save by user_id=1: alerts=1, breeding=1, cows=1, diagnosis=1, equipment=1, feed_medicine=0, finance=1, maintenance=1, milk=0, reports=1, sales=1, workers=0
+[2026-06-21 03:56:08] AJAX toggle — module=milk before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:08] AJAX toggle — module=workers before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:08] AJAX toggle — module=feed_medicine before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:11] Batch save by user_id=1: alerts=1, breeding=1, cows=1, diagnosis=1, equipment=1, feed_medicine=1, finance=1, maintenance=1, milk=1, reports=1, sales=1, workers=1
+[2026-06-21 03:56:16] AJAX toggle — module=cows before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=milk before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=sales before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=workers before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=feed_medicine before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=equipment before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=maintenance before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=finance before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=diagnosis before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=breeding before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:16] AJAX toggle — module=reports before=1 after=0 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:18] Batch save by user_id=1: alerts=1, breeding=0, cows=0, diagnosis=0, equipment=0, feed_medicine=0, finance=0, maintenance=0, milk=0, reports=0, sales=0, workers=0
+[2026-06-21 03:56:24] AJAX toggle — module=cows before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=milk before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=sales before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=workers before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=feed_medicine before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=equipment before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=maintenance before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=finance before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=diagnosis before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=breeding before=0 after=1 user_id=1 ip=127.0.0.1
+[2026-06-21 03:56:24] AJAX toggle — module=reports before=0 after=1 user_id=1 ip=127.0.0.1

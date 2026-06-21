@@ -114,7 +114,7 @@ function task_next_statuses(string $current): array {
 }
 
 $page_title = $viewing_own ? 'My Tasks' : "Tasks — {$my_worker['name']}";
-$active_nav = 'workers';
+$active_nav = 'my_tasks';
 
 $base_url = '/modules/workers/my_tasks.php' . (!$viewing_own && $my_worker ? '?worker_id=' . $my_worker['id'] : '');
 

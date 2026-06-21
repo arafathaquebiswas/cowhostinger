@@ -23,6 +23,7 @@ $form = [
     'unit'              => 'units',
     'expiry_date'       => '',
     'reorder_threshold' => '',
+    'cost_per_unit'     => '',
 ];
 
 if ($is_edit) {
@@ -39,6 +40,7 @@ if ($is_edit) {
         'unit'              => $existing['unit'],
         'expiry_date'       => $existing['expiry_date'] ?? '',
         'reorder_threshold' => $existing['reorder_threshold'],
+        'cost_per_unit'     => $existing['cost_per_unit'] ?? '',
     ]);
 }
 
@@ -53,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['quantity']          = trim($_POST['quantity']          ?? '');
     $form['expiry_date']       = trim($_POST['expiry_date']       ?? '');
     $form['reorder_threshold'] = trim($_POST['reorder_threshold'] ?? '');
+    $form['cost_per_unit']     = trim($_POST['cost_per_unit']     ?? '');
 
     if ($form['item_name'] === '') $errors[] = 'Medicine name is required.';
     if (strlen($form['item_name']) > 150) $errors[] = 'Name is too long.';
@@ -63,6 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $threshold = $form['reorder_threshold'] !== '' ? (float)$form['reorder_threshold'] : 0.0;
     if ($threshold < 0) $errors[] = 'Reorder threshold cannot be negative.';
+    $cpu = $form['cost_per_unit'] !== '' ? (float)$form['cost_per_unit'] : 0.0;
+    if ($cpu < 0) $errors[] = 'Cost per unit cannot be negative.';
 
     $expiry = $form['expiry_date'] !== '' ? $form['expiry_date'] : null;
     if ($expiry !== null && !strtotime($expiry)) $errors[] = 'Invalid expiry date.';
@@ -71,14 +76,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user_id = (int)$_SESSION['user_id'];
         if ($is_edit) {
             $db->prepare(
-                "UPDATE medicine_inventory SET item_name=?, quantity=?, unit=?, expiry_date=?, reorder_threshold=? WHERE id=? AND " . farmFilter()
-            )->execute([$form['item_name'], $qty, $form['unit'], $expiry, $threshold, $item_id]);
+                "UPDATE medicine_inventory SET item_name=?, quantity=?, unit=?, expiry_date=?, reorder_threshold=?, cost_per_unit=? WHERE id=? AND " . farmFilter()
+            )->execute([$form['item_name'], $qty, $form['unit'], $expiry, $threshold, $cpu, $item_id]);
             auditLog($user_id, 'UPDATE_MEDICINE_ITEM', 'medicine_inventory', $item_id, $existing, $form);
             flashMessage('success', "Medicine '{$form['item_name']}' updated.");
         } else {
             $db->prepare(
-                "INSERT INTO medicine_inventory (farm_id, item_name, quantity, unit, expiry_date, reorder_threshold) VALUES (?,?,?,?,?,?)"
-            )->execute([fid(), $form['item_name'], $qty, $form['unit'], $expiry, $threshold]);
+                "INSERT INTO medicine_inventory (farm_id, item_name, quantity, unit, expiry_date, reorder_threshold, cost_per_unit) VALUES (?,?,?,?,?,?,?)"
+            )->execute([fid(), $form['item_name'], $qty, $form['unit'], $expiry, $threshold, $cpu]);
             $new_id = (int)$db->lastInsertId();
             auditLog($user_id, 'CREATE_MEDICINE_ITEM', 'medicine_inventory', $new_id, null, $form);
             flashMessage('success', "Medicine '{$form['item_name']}' added.");
@@ -129,6 +134,13 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                            value="<?= e($form['unit']) ?>"
                            maxlength="50" placeholder="bottles, vials, mg…" required>
                 </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="cost_per_unit">Cost Per Unit (৳)</label>
+                <input type="number" id="cost_per_unit" name="cost_per_unit" class="form-control"
+                       value="<?= e($form['cost_per_unit']) ?>"
+                       step="0.01" min="0" placeholder="0.00">
+                <span class="form-hint">Used to calculate medicine cost in the feed/medicine log.</span>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
                 <div class="form-group">
