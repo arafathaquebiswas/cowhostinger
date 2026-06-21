@@ -80,10 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size:.75rem;color:rgba(255,255,255,.6);text-align:center;
             margin-top:.5rem;
         }
+        .auth-back { display:inline-flex;align-items:center;gap:.4rem;color:rgba(255,255,255,.75);font-size:.83rem;text-decoration:none;margin-bottom:1.5rem; }
+        .auth-back:hover { color:#fff;text-decoration:none; }
     </style>
 </head>
 <body class="auth-page">
 <div class="auth-wrap">
+    <a href="/home.php" class="auth-back">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Home
+    </a>
     <div class="auth-card">
         <div class="auth-brand">
             <div class="auth-brand-icon">
