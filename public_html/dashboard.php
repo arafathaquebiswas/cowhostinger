@@ -46,7 +46,7 @@ function _usageMeter(string $label, int $current, ?int $max, string $href = '#')
     <div>
         <h2>Welcome to <?= e($farm_name) ?></h2>
         <p class="text-muted text-sm">
-            <?= date('l, d F Y') ?>
+            <span id="liveClock"></span>
             <?php if ($farm_code): ?>
             &nbsp;·&nbsp; <span style="font-family:monospace;font-weight:600;color:var(--primary)"><?= e($farm_code) ?></span>
             <?php endif; ?>
@@ -472,6 +472,20 @@ function timeAgo(dt) {
 }
 
 loadDashAlerts();
+
+(function(){
+    const el = document.getElementById('liveClock');
+    if (!el) return;
+    const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    function tick() {
+        const d = new Date();
+        const dd = String(d.getDate()).padStart(2,'0');
+        el.textContent = days[d.getDay()] + ', ' + dd + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+    }
+    tick();
+    setInterval(tick, 60000);
+})();
 </script>
 
 <?php require_once __DIR__ . '/includes/layout_footer.php'; ?>
