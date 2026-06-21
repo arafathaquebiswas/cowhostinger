@@ -332,6 +332,16 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
                 Revenue
             </a>
+            <?php
+            $_pending_payments = (int)(getDB()->query("SELECT COUNT(*) FROM payments WHERE status='pending'")->fetchColumn() ?? 0);
+            ?>
+            <a href="/modules/super_admin/payments.php" class="nav-item<?= $_nav_active('payments') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                Payments
+                <?php if ($_pending_payments > 0): ?>
+                <span class="nav-badge"><?= min($_pending_payments, 99) ?></span>
+                <?php endif; ?>
+            </a>
             <a href="/modules/support/index.php" class="nav-item<?= $_nav_active('support') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
                 Tickets
