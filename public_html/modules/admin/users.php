@@ -56,8 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── Add / Edit user ────────────────────────────────────────
-    if ($action === 'add' && !farmCanAddUser()) {
-        $lim = farmResourceLimit('users');
+    if ($action === 'add' && !canAccess('user.create')) {
+        $lim = resourceUsage('users');
         flashMessage('error', "User limit reached ({$lim['current']}/{$lim['max']}). Upgrade your plan to add more users.");
         redirect('/modules/admin/users.php');
     }

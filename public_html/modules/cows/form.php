@@ -15,9 +15,8 @@ if (!$is_edit && !hasRole(['admin'])) {
     redirect('/modules/cows/index.php');
 }
 
-// Plan limit check
-if (!$is_edit && !farmCanAddCow()) {
-    $lim = farmResourceLimit('cows');
+if (!$is_edit && !canAccess('cow.create')) {
+    $lim = resourceUsage('cows');
     flashMessage('error', "Cow limit reached ({$lim['current']}/{$lim['max']}). Upgrade your plan to add more cows.");
     redirect('/modules/cows/index.php');
 }
@@ -155,10 +154,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', "Cow #{$tag} updated successfully.");
             redirect("/modules/cows/view.php?id={$cow_id}");
         } else {
-            // Subscription limit check
-            if (!farmCanAddCow()) {
-                $limit = farmCowLimit();
-                flashMessage('error', "Your plan allows a maximum of {$limit} active cows. Please upgrade to add more.");
+            // Subscription limit re-check at INSERT time
+            if (!canAccess('cow.create')) {
+                $lim = resourceUsage('cows');
+                flashMessage('error', "Your plan allows a maximum of {$lim['max']} active cows. Please upgrade to add more.");
                 redirect('/modules/cows/index.php');
             }
             $ins = $db->prepare(

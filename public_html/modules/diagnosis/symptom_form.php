@@ -8,8 +8,8 @@ requireModule('diagnosis');
 // Diagnosis add limit gate (edit is always allowed)
 $_diagnosis_id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
 $_is_edit      = $_diagnosis_id > 0;
-if (!$_is_edit && !farmCanAddDiagnosis()) {
-    $lim = farmResourceLimit('diagnosis');
+if (!$_is_edit && !canAccess('diagnosis.create')) {
+    $lim = resourceUsage('diagnosis');
     flashMessage('error', "Sick record limit reached ({$lim['current']}/{$lim['max']}). Upgrade your plan to add more.");
     redirect('/modules/diagnosis/index.php');
 }

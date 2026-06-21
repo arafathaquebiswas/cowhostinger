@@ -5,9 +5,8 @@ requireRole(['admin', 'accountant']);
 requireFarmScope();
 requireModule('finance');
 
-if (!farmCanFinance()) {
-    flashMessage('error', 'Finance module is not available on the Free plan. Upgrade to access.');
-    redirect('/modules/subscription/index.php');
+if (!canAccess('finance.view')) {
+    requireAccess('finance.view');
 }
 
 $page_title = 'Finance';

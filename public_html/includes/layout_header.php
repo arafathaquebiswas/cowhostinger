@@ -243,7 +243,7 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
             <!-- Finance -->
             <span class="nav-section-label">Finance &amp; Reports</span>
             <?php if ($_can(['admin', 'accountant'])): ?>
-            <?php if ($_module_enabled('finance') && farmCanFinance()): ?>
+            <?php if ($_module_enabled('finance') && canAccess('finance.view')): ?>
             <a href="/modules/finance/index.php" class="nav-item<?= $_nav_active('finance') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 Finance
@@ -252,17 +252,17 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 Finance Charts
             </a>
-            <?php elseif ($_layout_is_free): ?>
+            <?php else: ?>
             <?= lockedNavItem('Finance', '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>', 'Finance module') ?>
             <?php endif; ?>
             <?php endif; ?>
             <?php if ($_can(['admin', 'accountant'])): ?>
-            <?php if ($_module_enabled('reports') && farmCanReports()): ?>
+            <?php if ($_module_enabled('reports') && canAccess('report.view')): ?>
             <a href="/modules/reports/index.php" class="nav-item<?= $_nav_active('reports') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                 Reports
             </a>
-            <?php elseif ($_layout_is_free): ?>
+            <?php else: ?>
             <?= lockedNavItem('Reports', '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>', 'Reports & Exports') ?>
             <?php endif; ?>
             <?php endif; ?>

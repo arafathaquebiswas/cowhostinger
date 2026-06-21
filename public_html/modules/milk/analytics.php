@@ -5,9 +5,8 @@ requireAuth();
 requireFarmScope();
 requireModule('milk');
 
-if (!farmCanMilkAnalytics()) {
-    flashMessage('error', 'Milk Analytics is not available on the Free plan. Upgrade to access advanced analytics.');
-    redirect('/modules/subscription/index.php');
+if (!canAccess('milk.analytics')) {
+    requireAccess('milk.analytics');
 }
 
 $page_title = 'Milk Analytics';
