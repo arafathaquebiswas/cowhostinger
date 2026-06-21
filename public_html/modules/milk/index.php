@@ -83,11 +83,13 @@ $week_row = $week_row->fetch();
 $total_row = $db->prepare("SELECT COALESCE(SUM(liters),0) AS ltr, COUNT(*) AS cnt FROM milk_records WHERE " . farmFilter());
 $total_row->execute();
 $total_row = $total_row->fetch();
-$price_row = $db->query(
+$price_stmt = $db->prepare(
     "SELECT price_per_liter FROM milk_price_history
-     WHERE effective_date <= CURDATE()
-     ORDER BY effective_date DESC LIMIT 1"
-)->fetch();
+     WHERE farm_id = ? AND effective_date <= CURDATE()
+     ORDER BY effective_date DESC, id DESC LIMIT 1"
+);
+$price_stmt->execute([fid()]);
+$price_row     = $price_stmt->fetch();
 $current_price = $price_row ? (float)$price_row['price_per_liter'] : 0.0;
 $today_revenue = (float)$today_row['ltr'] * $current_price;
 

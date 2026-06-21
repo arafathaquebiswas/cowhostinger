@@ -38,7 +38,12 @@ $log("Starting subscription check. Grace period: {$grace_days} days.");
 $transitions = ['to_grace' => 0, 'to_expired' => 0, 'alerts_sent' => 0];
 
 // ── 1. active → grace ─────────────────────────────────────────────────────────
+// FOR UPDATE must be inside an explicit transaction — with autocommit=1 the lock
+// would be released immediately after SELECT, making it ineffective against
+// concurrent cron runs. The transaction holds the lock through the UPDATE.
 try {
+    $db->beginTransaction();
+
     $to_grace = $db->prepare(
         "SELECT s.id, s.farm_id, s.end_date, f.farm_name
          FROM subscriptions s
@@ -57,14 +62,21 @@ try {
             "UPDATE subscriptions SET status='grace', grace_end_date=? WHERE id=? AND status='active'"
         )->execute([$grace_end, $sub['id']]);
 
-        // Alert for the farm
-        _cronAlert($db, $sub['farm_id'], 'subscription', 'high',
-            "Your subscription has expired. You have {$grace_days} days grace period until {$grace_end}. Please renew.");
-
         $log("→ grace: farm #{$sub['farm_id']} ({$sub['farm_name']}) — grace until {$grace_end}");
         $transitions['to_grace']++;
     }
+
+    $db->commit();
+
+    // Alerts outside the transaction — inserts are non-critical and should not
+    // cause the transaction to roll back if they fail
+    foreach ($due_grace as $sub) {
+        $grace_end = date('Y-m-d', strtotime($sub['end_date'] . " +{$grace_days} days"));
+        _cronAlert($db, $sub['farm_id'], 'subscription', 'high',
+            "Your subscription has expired. You have {$grace_days} days grace period until {$grace_end}. Please renew.");
+    }
 } catch (\Throwable $e) {
+    if ($db->inTransaction()) $db->rollBack();
     $log("ERROR (active→grace): " . $e->getMessage());
 }
 

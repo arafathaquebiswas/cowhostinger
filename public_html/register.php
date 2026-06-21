@@ -7,7 +7,7 @@ if (isLoggedIn()) {
 }
 
 $errors = [];
-$form   = ['name' => '', 'phone' => '', 'email' => '', 'farm_name' => '', 'location' => '', 'has_farm' => 'yes'];
+$form   = ['name' => '', 'phone' => '', 'email' => '', 'farm_name' => '', 'location' => ''];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
@@ -18,20 +18,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email     = strtolower(trim($_POST['email'] ?? ''));
         $password  = $_POST['password']            ?? '';
         $confirm   = $_POST['confirm_password']    ?? '';
-        $has_farm  = ($_POST['has_farm'] ?? 'yes') === 'yes';
         $farm_name = sanitize($_POST['farm_name']  ?? '');
         $location  = sanitize($_POST['location']   ?? '');
 
-        $form = ['name'=>$name,'phone'=>$phone,'email'=>$email,'farm_name'=>$farm_name,'location'=>$location,'has_farm'=>$has_farm?'yes':'no'];
+        $form = ['name'=>$name,'phone'=>$phone,'email'=>$email,'farm_name'=>$farm_name,'location'=>$location];
 
         // Validation
         if ($name === '')         $errors[] = 'Full name is required.';
+        if ($farm_name === '')    $errors[] = 'Farm name is required.';
         if ($phone === '' && $email === '') $errors[] = 'At least one of phone or email is required.';
         if ($phone !== '' && !preg_match('/^[0-9\+\-\s()]{7,20}$/', $phone)) $errors[] = 'Enter a valid phone number.';
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Enter a valid email address.';
         if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
         if ($password !== $confirm)  $errors[] = 'Passwords do not match.';
-        if ($has_farm && $farm_name === '') $errors[] = 'Farm name is required when you have a farm.';
 
         if (empty($errors)) {
             $db = getDB();
@@ -56,52 +55,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $db->beginTransaction();
             try {
-                if ($has_farm) {
-                    // Create farm first
-                    $db->prepare(
-                        "INSERT INTO farms (farm_name, location, phone) VALUES (?,?,?)"
-                    )->execute([$farm_name, $location !== '' ? $location : null, $phone !== '' ? $phone : null]);
+                // Bug fix: farm_code is NOT NULL with STRICT mode — must be included in INSERT.
+                // Use a collision-safe temporary code; UPDATE to the canonical FARM-XXXXX immediately after.
+                $tmp_code = 'REG-' . bin2hex(random_bytes(8)); // 20 chars, unique within transaction
+                $db->prepare(
+                    "INSERT INTO farms (farm_name, location, phone, farm_code) VALUES (?,?,?,?)"
+                )->execute([$farm_name, $location !== '' ? $location : null, $phone !== '' ? $phone : null, $tmp_code]);
 
-                    $farm_id   = (int)$db->lastInsertId();
-                    $farm_code = 'FARM-' . str_pad($farm_id, 5, '0', STR_PAD_LEFT);
-                    $db->prepare("UPDATE farms SET farm_code=? WHERE id=?")->execute([$farm_code, $farm_id]);
+                $farm_id   = (int)$db->lastInsertId();
+                $farm_code = 'FARM-' . str_pad($farm_id, 5, '0', STR_PAD_LEFT);
+                $db->prepare("UPDATE farms SET farm_code=? WHERE id=?")->execute([$farm_code, $farm_id]);
 
-                    // Create owner account
-                    $db->prepare(
-                        "INSERT INTO users (farm_id, is_owner, name, email, phone, password_hash, role, status)
-                         VALUES (?,1,?,?,?,?,'admin','active')"
-                    )->execute([$farm_id, $name, $email !== '' ? $email : null, $phone !== '' ? $phone : null, $hash]);
+                // Create owner account
+                $db->prepare(
+                    "INSERT INTO users (farm_id, is_owner, name, email, phone, password_hash, role, status)
+                     VALUES (?,1,?,?,?,?,'admin','active')"
+                )->execute([$farm_id, $name, $email !== '' ? $email : null, $phone !== '' ? $phone : null, $hash]);
 
-                    $user_id = (int)$db->lastInsertId();
+                $user_id = (int)$db->lastInsertId();
 
-                    // Link farm owner
-                    $db->prepare("UPDATE farms SET owner_user_id=? WHERE id=?")->execute([$user_id, $farm_id]);
+                // Link farm owner
+                $db->prepare("UPDATE farms SET owner_user_id=? WHERE id=?")->execute([$user_id, $farm_id]);
 
-                    // Free subscription
-                    $db->prepare(
-                        "INSERT INTO subscriptions (farm_id, plan_id, start_date, status) VALUES (?,1,CURDATE(),'trial')"
-                    )->execute([$farm_id]);
+                // Free subscription (trial)
+                $db->prepare(
+                    "INSERT INTO subscriptions (farm_id, plan_id, start_date, status) VALUES (?,1,CURDATE(),'trial')"
+                )->execute([$farm_id]);
 
-                    auditLog($user_id, 'REGISTER_FARM', 'farms', $farm_id, null, ['farm_name'=>$farm_name]);
-                } else {
-                    // No farm — join as demo user on default farm (id=1)
-                    $db->prepare(
-                        "INSERT INTO users (farm_id, is_owner, name, email, phone, password_hash, role, status)
-                         VALUES (1,0,?,?,?,?,'user','active')"
-                    )->execute([$name, $email !== '' ? $email : null, $phone !== '' ? $phone : null, $hash]);
-
-                    $user_id   = (int)$db->lastInsertId();
-                    $farm_code = 'FARM-00001';
-                    auditLog($user_id, 'REGISTER_USER', 'users', $user_id, null, ['farm_id'=>1]);
-                }
+                auditLog($user_id, 'REGISTER_FARM', 'farms', $farm_id, null, ['farm_name' => $farm_name]);
 
                 $db->commit();
 
-                $msg = $has_farm
-                    ? "Farm registered! Your Farm Code is <strong>{$farm_code}</strong>. Please sign in."
-                    : 'Account created. Please sign in.';
-                flashMessage('success', $msg);
-                redirect('/index.php');
+                // Bug fix: establish login session immediately — do not force the user to sign in again.
+                session_regenerate_id(true);
+                _setUserSession([
+                    'id'       => $user_id,
+                    'name'     => $name,
+                    'email'    => $email !== '' ? $email : null,
+                    'role'     => 'admin',
+                    'farm_id'  => $farm_id,
+                    'is_owner' => 1,
+                ]);
+
+                flashMessage('success', "Welcome! Your Farm Code is <strong>{$farm_code}</strong>. Keep it safe — workers use it to log in.");
+                redirect('/dashboard.php');
 
             } catch (Throwable $e) {
                 $db->rollBack();
@@ -125,28 +122,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .auth-card { max-width: 520px; }
         .auth-back { display:inline-flex;align-items:center;gap:.4rem;color:rgba(255,255,255,.75);font-size:.83rem;text-decoration:none;margin-bottom:1.5rem; }
         .auth-back:hover { color:#fff;text-decoration:none; }
-        .farm-choice { display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.25rem; }
-        .choice-card { position:relative;cursor:pointer; }
-        .choice-card input { position:absolute;opacity:0;width:0;height:0; }
-        .choice-body {
-            border:2px solid var(--border);
-            border-radius:var(--radius);
-            padding:1rem;
-            text-align:center;
-            transition:var(--transition);
-            background:var(--bg-base);
-        }
-        .choice-card input:checked + .choice-body {
-            border-color:var(--primary);
-            background:var(--primary-soft);
-        }
-        .choice-icon { font-size:1.6rem;margin-bottom:.35rem; }
-        .choice-title { font-weight:600;font-size:.88rem;color:var(--text-primary); }
-        .choice-sub { font-size:.75rem;color:var(--text-secondary);margin-top:.2rem; }
         .reg-grid { display:grid;grid-template-columns:1fr 1fr;gap:0 1rem; }
         .divider { display:flex;align-items:center;gap:.75rem;margin:.25rem 0 1rem;color:var(--text-muted);font-size:.78rem; }
         .divider::before,.divider::after { content:'';flex:1;height:1px;background:var(--border); }
-        @media(max-width:480px){.farm-choice,.reg-grid{grid-template-columns:1fr;}}
+        @media(max-width:480px){.reg-grid{grid-template-columns:1fr;}}
     </style>
 </head>
 <body class="auth-page">
@@ -185,41 +164,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST" action="/register.php" novalidate id="regForm">
             <?= csrfField() ?>
 
-            <!-- Farm choice -->
-            <div class="farm-choice">
-                <label class="choice-card">
-                    <input type="radio" name="has_farm" value="yes" id="rYes" <?= $form['has_farm']==='yes' ? 'checked' : '' ?>>
-                    <div class="choice-body">
-                        <div class="choice-icon">🐄</div>
-                        <div class="choice-title">I Have a Farm</div>
-                        <div class="choice-sub">Register your farm &amp; become owner</div>
-                    </div>
-                </label>
-                <label class="choice-card">
-                    <input type="radio" name="has_farm" value="no" id="rNo" <?= $form['has_farm']==='no' ? 'checked' : '' ?>>
-                    <div class="choice-body">
-                        <div class="choice-icon">👀</div>
-                        <div class="choice-title">Just Exploring</div>
-                        <div class="choice-sub">Try with demo data first</div>
-                    </div>
-                </label>
+            <!-- Farm details -->
+            <div class="divider">Your Farm</div>
+            <div class="form-group">
+                <label class="form-label">Farm Name <span style="color:var(--danger)">*</span></label>
+                <input type="text" name="farm_name" class="form-control"
+                       value="<?= e($form['farm_name']) ?>" placeholder="e.g. Green Valley Dairy Farm"
+                       maxlength="200" required>
             </div>
-
-            <!-- Farm details (only when has farm) -->
-            <div id="farmSection">
-                <div class="divider">Your Farm</div>
-                <div class="form-group">
-                    <label class="form-label">Farm Name <span style="color:var(--danger)">*</span></label>
-                    <input type="text" name="farm_name" id="farm_name" class="form-control"
-                           value="<?= e($form['farm_name']) ?>" placeholder="e.g. Green Valley Dairy Farm" maxlength="200">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Farm Location</label>
-                    <input type="text" name="location" class="form-control"
-                           value="<?= e($form['location']) ?>" placeholder="e.g. Dhaka, Bangladesh" maxlength="300">
-                </div>
-                <div class="divider">Your Details</div>
+            <div class="form-group">
+                <label class="form-label">Farm Location</label>
+                <input type="text" name="location" class="form-control"
+                       value="<?= e($form['location']) ?>" placeholder="e.g. Dhaka, Bangladesh" maxlength="300">
             </div>
+            <div class="divider">Your Details</div>
 
             <!-- Personal info -->
             <div class="form-group">
@@ -251,9 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary btn-block">
-                <span id="btnText">Create Account</span>
-            </button>
+            <button type="submit" class="btn btn-primary btn-block">Register My Farm</button>
         </form>
 
         <p style="text-align:center;margin-top:1.25rem;font-size:.85rem;color:var(--text-secondary)">
@@ -267,30 +223,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <script>
 (function(){
     'use strict';
-    var rYes  = document.getElementById('rYes');
-    var rNo   = document.getElementById('rNo');
-    var sect  = document.getElementById('farmSection');
-    var fname = document.getElementById('farm_name');
-    var btn   = document.getElementById('btnText');
-
-    function toggle() {
-        var hasFarm = rYes.checked;
-        sect.style.display = hasFarm ? '' : 'none';
-        if (fname) fname.required = hasFarm;
-        btn.textContent = hasFarm ? 'Register My Farm' : 'Create Account';
-    }
-    rYes.addEventListener('change', toggle);
-    rNo.addEventListener('change',  toggle);
-    toggle();
-
-    // Confirm password match
     var pwd = document.querySelector('[name="password"]');
     var cpw = document.getElementById('confirmPwd');
     function chkMatch() {
         cpw.setCustomValidity(cpw.value && pwd.value !== cpw.value ? 'Passwords do not match.' : '');
     }
-    pwd.addEventListener('input', chkMatch);
-    cpw.addEventListener('input', chkMatch);
+    if (pwd && cpw) {
+        pwd.addEventListener('input', chkMatch);
+        cpw.addEventListener('input', chkMatch);
+    }
 }());
 </script>
 </body>

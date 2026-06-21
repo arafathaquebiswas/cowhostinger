@@ -205,6 +205,12 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 Analytics
             </a>
+            <?php if ($_can(['admin', 'accountant'])): ?>
+            <a href="/modules/milk/pricing.php" class="nav-item<?= $_nav_active('milk_pricing') ?>" style="padding-left:2.25rem;font-size:.83rem">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                Pricing
+            </a>
+            <?php endif; ?>
             <?php endif; ?>
 
             <?php if ($_module_enabled('breeding') && $_can(['admin', 'veterinarian', 'reception'])): ?>
