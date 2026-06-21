@@ -22,25 +22,13 @@ function computePeriodFinancials(PDO $db, string $from, string $to): array {
     $q = $db->prepare("SELECT COALESCE(SUM(total_revenue),0) FROM meat_sales WHERE {$ff} AND sale_date BETWEEN ? AND ?");
     $q->execute([$from,$to]); $rev_meat = (float)$q->fetchColumn();
 
-    $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM other_income WHERE {$ff} AND income_date BETWEEN ? AND ?");
-    $q->execute([$from,$to]); $rev_other = (float)$q->fetchColumn();
-
     $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE {$ff} AND type='income' AND transaction_date BETWEEN ? AND ?");
     $q->execute([$from,$to]); $rev_manual = (float)$q->fetchColumn();
 
-    $rev_total = $rev_milk + $rev_cow + $rev_meat + $rev_other + $rev_manual;
-
-    $q = $db->prepare("SELECT COALESCE(SUM(total_cost),0) FROM feed_logs WHERE {$ff} AND feed_date BETWEEN ? AND ?");
-    $q->execute([$from,$to]); $exp_feed = (float)$q->fetchColumn();
-
-    $q = $db->prepare("SELECT COALESCE(SUM(total_cost),0) FROM medicine_logs WHERE {$ff} AND administered_at BETWEEN ? AND ?");
-    $q->execute([$from,$to]); $exp_medicine = (float)$q->fetchColumn();
+    $rev_total = $rev_milk + $rev_cow + $rev_meat + $rev_manual;
 
     $q = $db->prepare("SELECT COALESCE(SUM(cost),0) FROM treatments WHERE {$ff} AND treatment_date BETWEEN ? AND ?");
     $q->execute([$from,$to]); $exp_treat = (float)$q->fetchColumn();
-
-    $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM vet_visits WHERE {$ff} AND visit_date BETWEEN ? AND ?");
-    $q->execute([$from,$to]); $exp_vet = (float)$q->fetchColumn();
 
     $q = $db->prepare("SELECT COALESCE(SUM(GREATEST(0,DATEDIFF(LEAST(IFNULL(termination_date,?),?),GREATEST(hire_date,?))+1)*salary/30.4375),0) FROM workers WHERE {$ff} AND hire_date<=? AND (termination_date IS NULL OR termination_date>=?)");
     $q->execute([$to,$to,$from,$to,$from]); $exp_workers = (float)$q->fetchColumn();
@@ -48,22 +36,17 @@ function computePeriodFinancials(PDO $db, string $from, string $to): array {
     $q = $db->prepare("SELECT COALESCE(SUM(cost),0) FROM maintenance_logs WHERE {$ff} AND completed_date BETWEEN ? AND ?");
     $q->execute([$from,$to]); $exp_maint = (float)$q->fetchColumn();
 
-    $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM misc_expenses WHERE {$ff} AND expense_date BETWEEN ? AND ?");
-    $q->execute([$from,$to]); $exp_misc = (float)$q->fetchColumn();
-
     $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE {$ff} AND type='expense' AND transaction_date BETWEEN ? AND ?");
     $q->execute([$from,$to]); $exp_manual = (float)$q->fetchColumn();
 
-    $exp_health = $exp_medicine + $exp_treat + $exp_vet;
-    $exp_total  = $exp_feed + $exp_health + $exp_workers + $exp_maint + $exp_misc + $exp_manual;
+    $exp_total  = $exp_treat + $exp_workers + $exp_maint + $exp_manual;
     $net_profit = $rev_total - $exp_total;
     $margin     = $rev_total > 0 ? $net_profit / $rev_total * 100 : 0.0;
 
     return compact(
         'from','to',
-        'rev_milk','rev_cow','rev_meat','rev_other','rev_manual','rev_total',
-        'exp_feed','exp_medicine','exp_treat','exp_vet','exp_workers',
-        'exp_maint','exp_misc','exp_manual','exp_health','exp_total',
+        'rev_milk','rev_cow','rev_meat','rev_manual','rev_total',
+        'exp_treat','exp_workers','exp_maint','exp_manual','exp_total',
         'net_profit','margin'
     );
 }
@@ -118,14 +101,9 @@ function buildTrend(PDO $db): array {
         ["SELECT YEAR(DATE(recorded_at)) yr,MONTH(DATE(recorded_at)) mo,SUM(milk_value) total FROM milk_records WHERE {$ff} AND contamination_flag=0 AND DATE(recorded_at) BETWEEN ? AND ? GROUP BY yr,mo",'rev'],
         ["SELECT YEAR(sale_date) yr,MONTH(sale_date) mo,SUM(sale_price) total FROM cow_sales WHERE {$ff} AND sale_date BETWEEN ? AND ? GROUP BY yr,mo",'rev'],
         ["SELECT YEAR(sale_date) yr,MONTH(sale_date) mo,SUM(total_revenue) total FROM meat_sales WHERE {$ff} AND sale_date BETWEEN ? AND ? GROUP BY yr,mo",'rev'],
-        ["SELECT YEAR(income_date) yr,MONTH(income_date) mo,SUM(amount) total FROM other_income WHERE {$ff} AND income_date BETWEEN ? AND ? GROUP BY yr,mo",'rev'],
         ["SELECT YEAR(transaction_date) yr,MONTH(transaction_date) mo,SUM(amount) total FROM finance_transactions WHERE {$ff} AND type='income' AND transaction_date BETWEEN ? AND ? GROUP BY yr,mo",'rev'],
-        ["SELECT YEAR(feed_date) yr,MONTH(feed_date) mo,SUM(total_cost) total FROM feed_logs WHERE {$ff} AND feed_date BETWEEN ? AND ? GROUP BY yr,mo",'exp'],
-        ["SELECT YEAR(administered_at) yr,MONTH(administered_at) mo,SUM(total_cost) total FROM medicine_logs WHERE {$ff} AND administered_at BETWEEN ? AND ? GROUP BY yr,mo",'exp'],
         ["SELECT YEAR(treatment_date) yr,MONTH(treatment_date) mo,SUM(cost) total FROM treatments WHERE {$ff} AND treatment_date BETWEEN ? AND ? GROUP BY yr,mo",'exp'],
-        ["SELECT YEAR(visit_date) yr,MONTH(visit_date) mo,SUM(amount) total FROM vet_visits WHERE {$ff} AND visit_date BETWEEN ? AND ? GROUP BY yr,mo",'exp'],
         ["SELECT YEAR(completed_date) yr,MONTH(completed_date) mo,SUM(cost) total FROM maintenance_logs WHERE {$ff} AND completed_date BETWEEN ? AND ? GROUP BY yr,mo",'exp'],
-        ["SELECT YEAR(expense_date) yr,MONTH(expense_date) mo,SUM(amount) total FROM misc_expenses WHERE {$ff} AND expense_date BETWEEN ? AND ? GROUP BY yr,mo",'exp'],
         ["SELECT YEAR(transaction_date) yr,MONTH(transaction_date) mo,SUM(amount) total FROM finance_transactions WHERE {$ff} AND type='expense' AND transaction_date BETWEEN ? AND ? GROUP BY yr,mo",'exp'],
     ];
     foreach ($sources as [$sql,$f]) { $q=$db->prepare($sql); $q->execute([$min,$max]); $add($q->fetchAll(),$f); }
@@ -156,21 +134,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $redir  = '/modules/finance/profit.php?tab=' . ($_POST['f_tab'] ?? 'overview');
 
     if ($action === 'add_income') {
-        $cat=$s=sanitize($_POST['category']??'Other'); $amt=(float)($_POST['amount']??0); $dt=trim($_POST['income_date']??''); $ntx=sanitize($_POST['notes']??'');
+        $cat=sanitize($_POST['category']??'Other'); $amt=(float)($_POST['amount']??0); $dt=trim($_POST['income_date']??''); $ntx=sanitize($_POST['notes']??'');
         if ($amt<=0) flashMessage('error','Amount must be > 0.');
         elseif (!strtotime($dt)) flashMessage('error','Invalid date.');
-        else { $db->prepare("INSERT INTO other_income (farm_id,category,amount,income_date,notes,recorded_by) VALUES(?,?,?,?,?,?)")->execute([fid(),$cat,$amt,$dt,$ntx?:null,$uid]); auditLog($uid,'ADD_OTHER_INCOME','other_income',(int)$db->lastInsertId(),null,compact('amt','cat')); flashMessage('success','Income recorded.'); }
+        else { $db->prepare("INSERT INTO finance_transactions (farm_id,type,category,amount,transaction_date,notes,recorded_by) VALUES(?,?,?,?,?,?,?)")->execute([fid(),'income',$cat,$amt,$dt,$ntx?:null,$uid]); auditLog($uid,'ADD_INCOME','finance_transactions',(int)$db->lastInsertId(),null,compact('amt','cat')); flashMessage('success','Income recorded.'); }
     } elseif ($action === 'add_expense') {
         $cat=sanitize($_POST['category']??'Miscellaneous'); $amt=(float)($_POST['amount']??0); $dt=trim($_POST['expense_date']??''); $ntx=sanitize($_POST['notes']??'');
         if ($amt<=0) flashMessage('error','Amount must be > 0.');
         elseif (!strtotime($dt)) flashMessage('error','Invalid date.');
-        else { $db->prepare("INSERT INTO misc_expenses (farm_id,category,amount,expense_date,notes,recorded_by) VALUES(?,?,?,?,?,?)")->execute([fid(),$cat,$amt,$dt,$ntx?:null,$uid]); auditLog($uid,'ADD_MISC_EXPENSE','misc_expenses',(int)$db->lastInsertId(),null,compact('amt','cat')); flashMessage('success','Expense recorded.'); }
+        else { $db->prepare("INSERT INTO finance_transactions (farm_id,type,category,amount,transaction_date,notes,recorded_by) VALUES(?,?,?,?,?,?,?)")->execute([fid(),'expense',$cat,$amt,$dt,$ntx?:null,$uid]); auditLog($uid,'ADD_EXPENSE','finance_transactions',(int)$db->lastInsertId(),null,compact('amt','cat')); flashMessage('success','Expense recorded.'); }
     } elseif ($action === 'delete_income' && hasRole(['admin'])) {
-        $rid=(int)($_POST['row_id']??0); $r=$db->prepare("SELECT * FROM other_income WHERE id=? AND ".farmFilter()); $r->execute([$rid]);
-        if ($row=$r->fetch()) { $db->prepare("DELETE FROM other_income WHERE id=? AND ".farmFilter())->execute([$rid]); flashMessage('success','Deleted.'); }
+        $rid=(int)($_POST['row_id']??0); $r=$db->prepare("SELECT * FROM finance_transactions WHERE id=? AND type='income' AND ".farmFilter()); $r->execute([$rid]);
+        if ($row=$r->fetch()) { $db->prepare("DELETE FROM finance_transactions WHERE id=? AND type='income' AND ".farmFilter())->execute([$rid]); auditLog($uid,'DELETE_INCOME','finance_transactions',$rid,$row,null); flashMessage('success','Deleted.'); }
     } elseif ($action === 'delete_expense' && hasRole(['admin'])) {
-        $rid=(int)($_POST['row_id']??0); $r=$db->prepare("SELECT * FROM misc_expenses WHERE id=? AND ".farmFilter()); $r->execute([$rid]);
-        if ($row=$r->fetch()) { $db->prepare("DELETE FROM misc_expenses WHERE id=? AND ".farmFilter())->execute([$rid]); flashMessage('success','Deleted.'); }
+        $rid=(int)($_POST['row_id']??0); $r=$db->prepare("SELECT * FROM finance_transactions WHERE id=? AND type='expense' AND ".farmFilter()); $r->execute([$rid]);
+        if ($row=$r->fetch()) { $db->prepare("DELETE FROM finance_transactions WHERE id=? AND type='expense' AND ".farmFilter())->execute([$rid]); auditLog($uid,'DELETE_EXPENSE','finance_transactions',$rid,$row,null); flashMessage('success','Deleted.'); }
     }
     redirect($redir);
 }
@@ -205,22 +183,19 @@ $trend = buildTrend($db);
 $cow_stmt = $db->prepare(
     "SELECT c.id, c.tag_number, c.breed AS cow_name,
         COALESCE(SUM(mr.milk_value),0) AS milk_rev,
-        COALESCE((SELECT SUM(fl.total_cost) FROM feed_logs fl WHERE fl.cow_id=c.id AND ".farmFilter('fl')." AND fl.feed_date BETWEEN ? AND ?),0) AS feed_cost,
-        COALESCE((SELECT SUM(ml.total_cost) FROM medicine_logs ml WHERE ml.cow_id=c.id AND ".farmFilter('ml')." AND ml.administered_at BETWEEN ? AND ?),0) AS med_cost,
-        COALESCE((SELECT SUM(t.cost) FROM treatments t WHERE t.cow_id=c.id AND ".farmFilter('t')." AND t.treatment_date BETWEEN ? AND ?),0) AS treat_cost,
-        COALESCE((SELECT SUM(vv.amount) FROM vet_visits vv WHERE vv.cow_id=c.id AND ".farmFilter('vv')." AND vv.visit_date BETWEEN ? AND ?),0) AS vet_cost
+        COALESCE((SELECT SUM(t.cost) FROM treatments t WHERE t.cow_id=c.id AND ".farmFilter('t')." AND t.treatment_date BETWEEN ? AND ?),0) AS treat_cost
     FROM cows c
     LEFT JOIN milk_records mr ON mr.cow_id=c.id AND ".farmFilter('mr')." AND mr.contamination_flag=0 AND DATE(mr.recorded_at) BETWEEN ? AND ?
     WHERE ".farmFilter('c')."
     GROUP BY c.id,c.tag_number,c.breed
-    HAVING milk_rev>0 OR feed_cost>0 OR med_cost>0 OR treat_cost>0 OR vet_cost>0
-    ORDER BY (milk_rev-feed_cost-med_cost-treat_cost-vet_cost) DESC LIMIT 30"
+    HAVING milk_rev>0 OR treat_cost>0
+    ORDER BY (milk_rev-treat_cost) DESC LIMIT 30"
 );
 $tmf = $fp['tm']['from']; $tmt = $fp['tm']['to'];
-$cow_stmt->execute([$tmf,$tmt, $tmf,$tmt, $tmf,$tmt, $tmf,$tmt, $tmf,$tmt]);
+$cow_stmt->execute([$tmf,$tmt, $tmf,$tmt]);
 $cow_rows = $cow_stmt->fetchAll();
 foreach ($cow_rows as &$cr) {
-    $cr['net'] = $cr['milk_rev'] - $cr['feed_cost'] - $cr['med_cost'] - $cr['treat_cost'] - $cr['vet_cost'];
+    $cr['net'] = $cr['milk_rev'] - $cr['treat_cost'];
 }
 unset($cr);
 
@@ -246,7 +221,7 @@ if ($fin_ly_ytd['net_profit'] != 0) {
     $insights[] = ['ok'=>$up, 'icon'=>$up?'🚀':'📉', 'text'=>'YTD profit is <strong>'.number_format(abs($chg),1).'% '.($up?'ahead of':'behind').'</strong> the same period last year'];
 }
 // Top expense category
-$exp_cats = ['Feed'=>$fp['tm']['exp_feed'],'Medicine & Vet'=>$fp['tm']['exp_health'],'Worker Salaries'=>$fp['tm']['exp_workers'],'Maintenance'=>$fp['tm']['exp_maint'],'Misc'=>$fp['tm']['exp_misc']];
+$exp_cats = ['Vet Treatments'=>$fp['tm']['exp_treat'],'Worker Salaries'=>$fp['tm']['exp_workers'],'Maintenance'=>$fp['tm']['exp_maint'],'Manual Expenses'=>$fp['tm']['exp_manual']];
 if ($fp['tm']['exp_total'] > 0) {
     $max_cat = (string)array_search(max($exp_cats),$exp_cats);
     $max_pct = round(max($exp_cats)/$fp['tm']['exp_total']*100);
@@ -302,8 +277,8 @@ if ($tab === 'compare') {
 }
 
 // ── Recent other income / misc expense for sidebar ────────────────────────────
-$oi_rows = $db->prepare("SELECT * FROM other_income  WHERE ".farmFilter()." ORDER BY income_date  DESC LIMIT 8"); $oi_rows->execute(); $oi_rows=$oi_rows->fetchAll();
-$me_rows = $db->prepare("SELECT * FROM misc_expenses WHERE ".farmFilter()." ORDER BY expense_date DESC LIMIT 8"); $me_rows->execute(); $me_rows=$me_rows->fetchAll();
+$oi_rows = $db->prepare("SELECT id,category,amount,transaction_date AS income_date,notes FROM finance_transactions WHERE ".farmFilter()." AND type='income' ORDER BY transaction_date DESC LIMIT 8"); $oi_rows->execute(); $oi_rows=$oi_rows->fetchAll();
+$me_rows = $db->prepare("SELECT id,category,amount,transaction_date AS expense_date,notes FROM finance_transactions WHERE ".farmFilter()." AND type='expense' ORDER BY transaction_date DESC LIMIT 8"); $me_rows->execute(); $me_rows=$me_rows->fetchAll();
 
 // ── Chart JSON ────────────────────────────────────────────────────────────────
 $chart_labels = json_encode(array_column($trend,'label'));
@@ -429,14 +404,10 @@ function render_delta(?float $pct, bool $inverse = false): string {
     <div class="card-body" style="padding:.6rem 1rem">
         <?php
         $exp_items = [
-            ['Feed Cost',        $fp['tm']['exp_feed'],    '#d97706'],
-            ['Medicine',         $fp['tm']['exp_medicine'],'#7c3aed'],
-            ['Treatments',       $fp['tm']['exp_treat'],   '#0369a1'],
-            ['Vet Visits',       $fp['tm']['exp_vet'],     '#0284c7'],
+            ['Vet Treatments',   $fp['tm']['exp_treat'],   '#7c3aed'],
             ['Worker Salaries',  $fp['tm']['exp_workers'], '#16a34a'],
             ['Maintenance',      $fp['tm']['exp_maint'],   '#6b7280'],
-            ['Misc Expenses',    $fp['tm']['exp_misc'],    '#9ca3af'],
-            ['Manual Entries',   $fp['tm']['exp_manual'],  '#d1d5db'],
+            ['Manual Expenses',  $fp['tm']['exp_manual'],  '#d97706'],
         ];
         foreach ($exp_items as [$lbl,$val,$col]):
             if ($val <= 0) continue;
@@ -496,16 +467,14 @@ function render_delta(?float $pct, bool $inverse = false): string {
     <div style="overflow-x:auto">
         <table class="table" style="font-size:.82rem">
             <thead>
-                <tr><th>Cow</th><th class="text-right">Milk Rev.</th><th class="text-right">Feed</th><th class="text-right">Medicine</th><th class="text-right">Vet</th><th class="text-right">Net</th></tr>
+                <tr><th>Cow</th><th class="text-right">Milk Rev.</th><th class="text-right">Treatments</th><th class="text-right">Net</th></tr>
             </thead>
             <tbody>
             <?php foreach ($cow_rows as $cr): ?>
             <tr>
                 <td><a href="/modules/cows/profile.php?id=<?= $cr['id'] ?>"><strong><?= e($cr['cow_name']?:'—') ?></strong> <span class="text-muted text-xs">#<?= e($cr['tag_number']) ?></span></a></td>
                 <td class="text-right" style="color:#15803d"><?= fmt($cr['milk_rev']) ?></td>
-                <td class="text-right" style="color:#d97706"><?= fmt($cr['feed_cost']) ?></td>
-                <td class="text-right" style="color:#7c3aed"><?= fmt($cr['med_cost']+$cr['treat_cost']) ?></td>
-                <td class="text-right" style="color:#0284c7"><?= fmt($cr['vet_cost']) ?></td>
+                <td class="text-right" style="color:#7c3aed"><?= fmt($cr['treat_cost']) ?></td>
                 <td class="text-right" style="font-weight:700;color:<?= $cr['net']>=0?'#15803d':'#b91c1c' ?>"><?= ($cr['net']<0?'-':'').fmt($cr['net']) ?></td>
             </tr>
             <?php endforeach; ?>
@@ -683,16 +652,17 @@ $has_c  = isset($cmp['c']);
             <tbody>
             <?php
             $cmp_metrics = [
-                ['Total Revenue',    'rev_total',    false, '#15803d'],
-                ['  Milk Revenue',   'rev_milk',     false, '#6b7280'],
-                ['  Cow Sales',      'rev_cow',      false, '#6b7280'],
-                ['  Meat Sales',     'rev_meat',     false, '#6b7280'],
-                ['Total Expenses',   'exp_total',    true,  '#b91c1c'],
-                ['  Feed',           'exp_feed',     true,  '#6b7280'],
-                ['  Medicine & Vet', 'exp_health',   true,  '#6b7280'],
-                ['  Workers',        'exp_workers',  true,  '#6b7280'],
-                ['  Maintenance',    'exp_maint',    true,  '#6b7280'],
-                ['Net Profit',       'net_profit',   false, '#7c3aed'],
+                ['Total Revenue',      'rev_total',   false, '#15803d'],
+                ['  Milk Revenue',     'rev_milk',    false, '#6b7280'],
+                ['  Cow Sales',        'rev_cow',     false, '#6b7280'],
+                ['  Meat Sales',       'rev_meat',    false, '#6b7280'],
+                ['  Manual Income',    'rev_manual',  false, '#6b7280'],
+                ['Total Expenses',     'exp_total',   true,  '#b91c1c'],
+                ['  Vet Treatments',   'exp_treat',   true,  '#6b7280'],
+                ['  Worker Salaries',  'exp_workers', true,  '#6b7280'],
+                ['  Maintenance',      'exp_maint',   true,  '#6b7280'],
+                ['  Manual Expenses',  'exp_manual',  true,  '#6b7280'],
+                ['Net Profit',         'net_profit',  false, '#7c3aed'],
             ];
             foreach ($cmp_metrics as [$lbl, $key, $inv, $col]):
                 $va = $cmp['a'][$key] ?? 0;

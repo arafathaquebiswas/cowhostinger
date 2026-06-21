@@ -83,7 +83,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'payme
         redirect('/modules/subscription/index.php#request-form');
     }
 
-    $amount = $plan_row['price_monthly'] * $months;
+    $effective_price = ($plan_row['offer_active'] && $plan_row['offer_price'] > 0)
+                       ? (float)$plan_row['offer_price']
+                       : (float)$plan_row['price_monthly'];
+    $amount = $effective_price * $months;
 
     $db->prepare(
         "INSERT INTO payments (farm_id, plan_id, amount, currency, method, transaction_ref,
@@ -235,36 +238,60 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 <!-- Pricing Plans -->
 <h3 style="margin-bottom:1rem;font-size:1.1rem;font-weight:700">Available Plans</h3>
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;margin-bottom:1.5rem">
-<?php foreach ($all_plans as $pl): ?>
-<?php $is_current = ($plan['name'] ?? '') === $pl['name']; ?>
-<div class="card" style="border:2px solid <?= $is_current ? '#7C3AED' : 'var(--border)' ?>;position:relative<?= $pl['name']==='Pro'?';box-shadow:0 4px 20px rgba(124,58,237,.15)':'' ?>">
-    <?php if ($pl['name'] === 'Pro'): ?>
+<?php foreach ($all_plans as $pl):
+    $is_current  = ($plan['name'] ?? '') === $pl['name'];
+    $has_offer   = !empty($pl['offer_active']) && !empty($pl['offer_price']) && (float)$pl['offer_price'] > 0;
+    $disp_price  = $has_offer ? (float)$pl['offer_price'] : (float)$pl['price_monthly'];
+    $is_featured = !empty($pl['is_featured']);
+?>
+<div class="card" style="border:2px solid <?= $is_current ? '#7C3AED' : ($is_featured ? '#7C3AED' : 'var(--border)') ?>;position:relative<?= $is_featured ? ';box-shadow:0 4px 20px rgba(124,58,237,.15)' : '' ?>">
+    <?php if ($is_featured): ?>
     <div style="position:absolute;top:-1px;right:16px;background:#7C3AED;color:#fff;font-size:.65rem;font-weight:700;letter-spacing:.05em;padding:.2rem .6rem;border-radius:0 0 6px 6px;text-transform:uppercase">Most Popular</div>
     <?php endif; ?>
-    <div class="card-body" style="padding:1.25rem">
+    <?php if ($has_offer && $pl['offer_label']): ?>
+    <div style="position:absolute;top:-1px;left:12px;background:#16a34a;color:#fff;font-size:.62rem;font-weight:700;padding:.2rem .55rem;border-radius:0 0 6px 6px;text-transform:uppercase"><?= e($pl['offer_label']) ?></div>
+    <?php endif; ?>
+    <div class="card-body" style="padding:1.25rem<?= $is_featured ? ';padding-top:1.6rem' : '' ?>">
         <div style="font-size:1rem;font-weight:700;color:#111827;margin-bottom:.25rem"><?= e($pl['name']) ?></div>
-        <div style="font-size:1.6rem;font-weight:800;color:#111827;margin-bottom:.1rem">
-            <?= $pl['price_monthly'] > 0 ? '৳' . number_format($pl['price_monthly']) : '<span style="color:#059669">Free</span>' ?>
-            <?php if ($pl['price_monthly'] > 0): ?><span style="font-size:.75rem;font-weight:400;color:#6B7280">/month</span><?php endif; ?>
-        </div>
+
+        <!-- Price display -->
+        <?php if ($pl['price_monthly'] > 0): ?>
+            <?php if ($has_offer): ?>
+            <div style="font-size:.8rem;color:#9CA3AF;text-decoration:line-through;line-height:1">৳<?= number_format($pl['price_monthly']) ?></div>
+            <div style="font-size:1.6rem;font-weight:800;color:#16a34a;margin-bottom:.05rem">
+                ৳<?= number_format($disp_price) ?><span style="font-size:.75rem;font-weight:400;color:#4b7c59">/month</span>
+            </div>
+            <div style="font-size:.7rem;color:#16a34a;font-weight:600;margin-bottom:.1rem">
+                Save ৳<?= number_format($pl['price_monthly'] - $disp_price) ?>/month
+                <?= $pl['offer_end'] ? '&nbsp;· expires ' . e($pl['offer_end']) : '' ?>
+            </div>
+            <?php else: ?>
+            <div style="font-size:1.6rem;font-weight:800;color:#111827;margin-bottom:.1rem">
+                ৳<?= number_format($pl['price_monthly']) ?><span style="font-size:.75rem;font-weight:400;color:#6B7280">/month</span>
+            </div>
+            <?php endif; ?>
+        <?php else: ?>
+            <div style="font-size:1.6rem;font-weight:800;color:#059669;margin-bottom:.1rem">Free</div>
+        <?php endif; ?>
+
         <div style="font-size:.72rem;color:#9CA3AF;margin-bottom:1rem">
             <?= $pl['billing_days'] ? $pl['billing_days'] . ' day billing cycle' : 'No expiry' ?>
         </div>
         <ul style="list-style:none;padding:0;margin:0 0 1.25rem;font-size:.8rem;color:#374151;display:flex;flex-direction:column;gap:.4rem">
-            <li>🐄 Cows: <strong><?= $pl['cows_limit'] ?? 'Unlimited' ?></strong></li>
-            <li>👷 Workers: <strong><?= $pl['workers_limit'] ?? 'Unlimited' ?></strong></li>
-            <li>⚙️ Equipment: <strong><?= $pl['equipment_limit'] ?? 'Unlimited' ?></strong></li>
-            <li style="color:<?= $pl['can_finance'] ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_finance'] ? '✓' : '✗' ?> Finance Module</li>
-            <li style="color:<?= $pl['can_reports'] ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_reports'] ? '✓' : '✗' ?> Reports</li>
-            <li style="color:<?= $pl['can_export'] ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_export'] ? '✓' : '✗' ?> Export Data</li>
-            <li style="color:<?= $pl['can_milk_analytics'] ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_milk_analytics'] ? '✓' : '✗' ?> Milk Analytics</li>
+            <li>&#x1F404; Cows: <strong><?= $pl['cows_limit'] ?? 'Unlimited' ?></strong></li>
+            <li>&#x1F477; Workers: <strong><?= $pl['workers_limit'] ?? 'Unlimited' ?></strong></li>
+            <li>&#x2699;&#xFE0F; Equipment: <strong><?= $pl['equipment_limit'] ?? 'Unlimited' ?></strong></li>
+            <li style="color:<?= $pl['can_finance']        ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_finance']        ? '&#x2713;' : '&#x2717;' ?> Finance Module</li>
+            <li style="color:<?= $pl['can_reports']        ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_reports']        ? '&#x2713;' : '&#x2717;' ?> Reports</li>
+            <li style="color:<?= $pl['can_export']         ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_export']         ? '&#x2713;' : '&#x2717;' ?> Export Data</li>
+            <li style="color:<?= $pl['can_milk_analytics'] ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_milk_analytics'] ? '&#x2713;' : '&#x2717;' ?> Milk Analytics</li>
         </ul>
         <?php if ($is_current): ?>
         <div class="btn btn-primary btn-block" style="background:#7C3AED;border:none;text-align:center;cursor:default">Current Plan</div>
         <?php elseif ($pl['price_monthly'] > 0): ?>
         <button type="button" class="btn btn-primary btn-block"
-                style="background:linear-gradient(135deg,#7C3AED,#A855F7);border:none"
-                onclick="openPaymentModal(<?= $pl['id'] ?>, '<?= e(addslashes($pl['name'])) ?>', <?= (int)$pl['price_monthly'] ?>)">
+                style="background:linear-gradient(135deg,<?= $is_featured ? '#7C3AED,#A855F7' : '#374151,#4B5563' ?>);border:none"
+                onclick="openPaymentModal(<?= $pl['id'] ?>, '<?= e(addslashes($pl['name'])) ?>', <?= $disp_price ?>, <?= (float)$pl['price_monthly'] ?>)">
             Upgrade to <?= e($pl['name']) ?>
         </button>
         <?php else: ?>
@@ -435,11 +462,17 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 <script>
 var _planPrice = 0;
 
-function openPaymentModal(planId, planName, priceMonthly) {
-    _planPrice = priceMonthly;
-    document.getElementById('modalPlanId').value    = planId;
+function openPaymentModal(planId, planName, effectivePrice, originalPrice) {
+    _planPrice = effectivePrice;
+    document.getElementById('modalPlanId').value = planId;
     document.getElementById('modalPlanName').textContent = 'Upgrade to ' + planName;
-    document.getElementById('modalPlanPrice').textContent = '৳' + priceMonthly.toLocaleString() + '/month';
+    var priceEl = document.getElementById('modalPlanPrice');
+    if (originalPrice && originalPrice !== effectivePrice) {
+        priceEl.innerHTML = '<span style="text-decoration:line-through;opacity:.6">৳' + Math.round(originalPrice).toLocaleString() + '</span>'
+                          + ' <span style="color:#bbf7d0;font-weight:700">৳' + Math.round(effectivePrice).toLocaleString() + '/month (Offer)</span>';
+    } else {
+        priceEl.textContent = '৳' + Math.round(effectivePrice).toLocaleString() + '/month';
+    }
     updateAmount();
     document.getElementById('paymentModalOverlay').style.display = 'flex';
     document.body.style.overflow = 'hidden';
