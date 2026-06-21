@@ -23,6 +23,26 @@ $farm          = currentFarm();
 $farm_name     = $farm['farm_name'] ?? APP_NAME;
 $farm_code     = $farm['farm_code'] ?? null;
 $plan_name     = $farm['plan_name'] ?? 'Free';
+
+// SaaS plan + usage for dashboard
+$_plan    = farmPlan();
+$_usage   = farmAllUsage();
+$_is_free = $_plan['is_free'] ?? true;
+
+function _usageMeter(string $label, int $current, ?int $max, string $href = '#'): string {
+    if ($max === null) {
+        $pct = 0; $limit_str = 'Unlimited';
+    } else {
+        $pct = $max > 0 ? min(100, round($current / $max * 100)) : 100;
+        $limit_str = $current . ' / ' . $max;
+    }
+    $bar_class = $pct >= 100 ? 'full' : ($pct >= 80 ? 'warn' : '');
+    return '<a href="' . e($href) . '" style="text-decoration:none;color:inherit">'
+         . '<div style="font-size:.78rem;color:var(--text-secondary);display:flex;justify-content:space-between;margin-bottom:.1rem">'
+         . '<span>' . e($label) . '</span><span style="font-weight:600;color:' . ($pct>=100?'var(--danger)':($pct>=80?'var(--warning)':'var(--text-primary)')) . '">' . $limit_str . '</span></div>'
+         . '<div class="usage-meter"><div class="usage-meter-fill ' . $bar_class . '" data-pct="' . $pct . '" style="width:' . $pct . '%"></div></div>'
+         . '</a>';
+}
 ?>
 
 <div class="page-header">
@@ -128,6 +148,59 @@ $plan_name     = $farm['plan_name'] ?? 'Free';
         <div class="kpi-label">Prev Month Profit</div>
     </a>
 </div>
+
+<?php if ($_is_free || $_plan['is_grace'] || $_plan['is_expired']): ?>
+<!-- ── Plan Usage & Upgrade Panel ────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:1.5rem;border:2px solid <?= $_plan['is_blocked'] ? '#FECACA' : '#E9D5FF' ?>">
+    <div class="card-header" style="background:<?= $_plan['is_blocked'] ? '#FEF2F2' : '#F5F3FF' ?>;border-bottom:1px solid <?= $_plan['is_blocked'] ? '#FECACA' : '#E9D5FF' ?>">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+            <div style="display:flex;align-items:center;gap:.6rem">
+                <span style="font-size:1.2rem"><?= $_plan['is_blocked'] ? '🔒' : '📊' ?></span>
+                <div>
+                    <span style="font-weight:700;color:#111827">Plan Usage</span>
+                    <span style="margin-left:.5rem"><?= farmPlanBadge() ?></span>
+                    <?php if ($_plan['days_left'] !== null && $_plan['days_left'] > 0): ?>
+                    <span style="margin-left:.5rem;font-size:.75rem;color:#6B7280">Expires in <?= $_plan['days_left'] ?> days</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <a href="/modules/subscription/index.php" class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff;border:none;font-weight:600">
+                🚀 Upgrade Plan
+            </a>
+        </div>
+    </div>
+    <div class="card-body" style="padding:1rem 1.25rem">
+        <?php if ($_plan['is_blocked']): ?>
+        <div style="text-align:center;padding:1rem;color:#DC2626">
+            <strong>Access is restricted.</strong> <?= $_plan['is_suspended'] ? 'Your account is suspended. Contact AB IT support.' : 'Your subscription has expired. Please renew to continue.' ?>
+        </div>
+        <?php else: ?>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem">
+            <?php
+            $limits = [
+                'cows'      => ['Cows',       $_plan['cows_limit']      ?? null, '/modules/cows/index.php'],
+                'workers'   => ['Workers',    $_plan['workers_limit']   ?? null, '/modules/workers/index.php'],
+                'equipment' => ['Equipment',  $_plan['equipment_limit'] ?? null, '/modules/equipment/index.php'],
+                'feed'      => ['Feed Items', $_plan['feed_limit']      ?? null, '/modules/feed_medicine/index.php?tab=feed'],
+                'medicine'  => ['Medicine',   $_plan['medicine_limit']  ?? null, '/modules/feed_medicine/index.php?tab=medicine'],
+            ];
+            foreach ($limits as $key => [$label, $max, $href]):
+                $cur = $_usage[$key] ?? 0;
+                echo '<div>' . _usageMeter($label, $cur, $max, $href) . '</div>';
+            endforeach;
+            ?>
+        </div>
+        <?php if ($_is_free): ?>
+        <div style="margin-top:1rem;padding:.75rem;background:#F5F3FF;border-radius:8px;font-size:.82rem;color:#4B5563;line-height:1.6">
+            <strong style="color:#7C3AED">Free Plan limitations:</strong>
+            Finance, Reports, Milk Analytics, and Export are locked.
+            Upgrade to <strong>Basic</strong> or <strong>Pro</strong> to unlock all features.
+        </div>
+        <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Charts row -->
 <div class="chart-grid">

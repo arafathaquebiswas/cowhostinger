@@ -10,6 +10,12 @@ $eq_id  = (int)($_GET['id'] ?? 0);
 $is_edit = $eq_id > 0;
 $existing = null;
 
+if (!$is_edit && !farmCanAddEquipment()) {
+    $lim = farmResourceLimit('equipment');
+    flashMessage('error', "Equipment limit reached ({$lim['current']}/{$lim['max']}). Upgrade your plan to add more equipment.");
+    redirect('/modules/equipment/index.php');
+}
+
 $errors = [];
 $form = [
     'name'                  => '',

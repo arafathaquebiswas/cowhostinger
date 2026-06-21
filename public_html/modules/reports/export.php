@@ -5,6 +5,11 @@ requireRole(['admin', 'accountant']);
 requireFarmScope();
 requireModule('reports');
 
+if (!farmCanExport()) {
+    flashMessage('error', 'Export is not available on your current plan. Upgrade to Pro to export data.');
+    redirect('/modules/subscription/index.php');
+}
+
 $db   = getDB();
 $type = sanitize($_GET['type'] ?? '');
 $fmt  = sanitize($_GET['fmt']  ?? 'csv');

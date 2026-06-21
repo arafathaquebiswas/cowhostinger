@@ -56,6 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── Add / Edit user ────────────────────────────────────────
+    if ($action === 'add' && !farmCanAddUser()) {
+        $lim = farmResourceLimit('users');
+        flashMessage('error', "User limit reached ({$lim['current']}/{$lim['max']}). Upgrade your plan to add more users.");
+        redirect('/modules/admin/users.php');
+    }
+
     if (in_array($action, ['add', 'edit'], true)) {
         $name     = sanitize($_POST['name']     ?? '');
         $email    = strtolower(sanitize($_POST['email'] ?? ''));

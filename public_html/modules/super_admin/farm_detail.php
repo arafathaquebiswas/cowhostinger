@@ -71,6 +71,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($action === 'impersonate') {
+        // CEO impersonation — temporarily view system as this farm's admin
+        $_SESSION['impersonating_as_farm_id'] = $farm_id;
+        // Log impersonation start
+        $db->prepare(
+            "INSERT INTO impersonation_log (superadmin_id, target_farm_id, ip_address) VALUES (?,?,?)"
+        )->execute([$uid, $farm_id, $_SERVER['REMOTE_ADDR'] ?? null]);
+        auditLog($uid, 'IMPERSONATION_START', 'farms', $farm_id);
+        flashMessage('info', "Now viewing as {$farm['farm_name']}. Click 'Exit Impersonation' to return.");
+        redirect('/dashboard.php');
+    }
+
+    if ($action === 'record_payment') {
+        $amount  = (float)($_POST['amount']  ?? 0);
+        $method  = in_array($_POST['method'] ?? '', ['bkash','nagad','rocket','bank','manual'], true)
+                   ? $_POST['method'] : 'manual';
+        $ref     = sanitize($_POST['transaction_ref'] ?? '');
+        $months  = max(1, (int)($_POST['months'] ?? 1));
+        $notes   = sanitize($_POST['notes'] ?? '');
+        $plan_id = (int)($_POST['plan_id'] ?? 1);
+
+        if ($amount > 0) {
+            $db->beginTransaction();
+            try {
+                // Record payment
+                $db->prepare(
+                    "INSERT INTO payments (farm_id, plan_id, amount, method, transaction_ref, status, months, paid_at, recorded_by, notes)
+                     VALUES (?,?,?,?,?,'completed',?,NOW(),?,?)"
+                )->execute([$farm_id, $plan_id, $amount, $method, $ref ?: null, $months, $uid, $notes ?: null]);
+
+                // Update/insert subscription
+                $end_date = date('Y-m-d', strtotime("+{$months} months"));
+                $sub_row = $db->prepare("SELECT id FROM subscriptions WHERE farm_id=? ORDER BY id DESC LIMIT 1");
+                $sub_row->execute([$farm_id]);
+                if ($sr = $sub_row->fetch()) {
+                    $db->prepare("UPDATE subscriptions SET plan_id=?,status='active',end_date=?,grace_end_date=NULL WHERE id=?")
+                       ->execute([$plan_id, $end_date, $sr['id']]);
+                } else {
+                    $db->prepare("INSERT INTO subscriptions (farm_id,plan_id,status,start_date,end_date) VALUES (?,?,'active',CURDATE(),?)")
+                       ->execute([$farm_id, $plan_id, $end_date]);
+                }
+                // Ensure farm is active
+                $db->prepare("UPDATE farms SET status='active' WHERE id=?")->execute([$farm_id]);
+                $db->commit();
+                auditLog($uid, 'RECORD_PAYMENT', 'payments', (int)$db->lastInsertId(), null, ['amount'=>$amount,'plan_id'=>$plan_id]);
+                flashMessage('success', "Payment of ৳" . number_format($amount, 2) . " recorded. Subscription extended to {$end_date}.");
+            } catch (\Throwable $e) {
+                $db->rollBack();
+                flashMessage('error', 'Failed to record payment: ' . $e->getMessage());
+            }
+        } else {
+            flashMessage('error', 'Amount must be greater than zero.');
+        }
+    }
+
     redirect("/modules/super_admin/farm_detail.php?id={$farm_id}");
 }
 
@@ -113,7 +168,19 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             </span>
         </p>
     </div>
-    <a href="/modules/super_admin/index.php" class="btn btn-secondary">← Back to All Farms</a>
+    <div style="display:flex;gap:.5rem">
+        <form method="POST" style="margin:0">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="impersonate">
+            <button type="submit" class="btn btn-warning"
+                    onclick="return confirm('View system as this farm? You can exit via the banner on any page.')"
+                    style="background:#D97706;border-color:#D97706;color:#fff">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><circle cx="12" cy="8" r="4"/><path d="M2 20c0-4 4-7 10-7s10 3 10 7"/></svg>
+                Login As This Farm
+            </button>
+        </form>
+        <a href="/modules/super_admin/index.php" class="btn btn-secondary">← Back</a>
+    </div>
 </div>
 
 <!-- Stats row -->
@@ -224,6 +291,9 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <?php if ($farm['sub_start']): ?>
                     · Since <?= e(formatDate($farm['sub_start'])) ?>
                     <?php endif; ?>
+                    <?php if ($farm['sub_end']): ?>
+                    · Expires <?= e(formatDate($farm['sub_end'])) ?>
+                    <?php endif; ?>
                 </p>
                 <form method="POST">
                     <?= csrfField() ?>
@@ -239,6 +309,60 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         </select>
                     </div>
                     <button type="submit" class="btn btn-secondary" style="width:100%">Update Plan</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Record Payment -->
+        <div class="card" style="border:1px solid #BBF7D0">
+            <div class="card-header" style="background:#F0FDF4"><span class="card-title" style="color:#065F46">Record Payment</span></div>
+            <div style="padding:1.25rem">
+                <form method="POST">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="action" value="record_payment">
+                    <div class="form-group">
+                        <label class="form-label">Plan</label>
+                        <select name="plan_id" class="form-control">
+                            <?php foreach ($plans as $pl): ?>
+                            <?php if ($pl['price_monthly'] > 0): ?>
+                            <option value="<?= $pl['id'] ?>" <?= ($farm['plan_id']==$pl['id'])?'selected':'' ?>>
+                                <?= e($pl['name']) ?> — ৳<?= number_format($pl['price_monthly'],0) ?>/mo
+                            </option>
+                            <?php endif; ?>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+                        <div class="form-group">
+                            <label class="form-label">Amount (৳)</label>
+                            <input type="number" name="amount" class="form-control" min="1" step="0.01" placeholder="499.00" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Months</label>
+                            <input type="number" name="months" class="form-control" min="1" max="24" value="1" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Method</label>
+                        <select name="method" class="form-control">
+                            <option value="bkash">bKash</option>
+                            <option value="nagad">Nagad</option>
+                            <option value="rocket">Rocket</option>
+                            <option value="bank">Bank Transfer</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Transaction Ref</label>
+                        <input type="text" name="transaction_ref" class="form-control" placeholder="TXN123456" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes (optional)</label>
+                        <textarea name="notes" class="form-control" rows="2" maxlength="500" placeholder="Additional notes..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success" style="width:100%;background:#059669;border-color:#059669">
+                        ✓ Record Payment &amp; Activate
+                    </button>
                 </form>
             </div>
         </div>

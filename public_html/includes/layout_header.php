@@ -17,6 +17,10 @@ $_layout_alert_count = getUnreadAlertCount();
 $_layout_flash       = getFlashMessage();
 $_layout_farm        = currentFarm();
 $_layout_farm_name   = $_layout_farm['farm_name'] ?? APP_NAME;
+$_layout_plan        = farmPlan();
+$_layout_expiry_html = farmExpiryBanner();
+$_layout_is_free     = $_layout_plan['is_free'] ?? true;
+$_layout_is_blocked  = $_layout_plan['is_blocked'] ?? false;
 
 $_nav_active = function (string $key) use ($active_nav): string {
     return (($active_nav ?? '') === $key) ? ' active' : '';
@@ -40,8 +44,94 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
     <?php if (!empty($extra_css)): foreach ($extra_css as $_css_url): ?>
     <link rel="stylesheet" href="<?= e($_css_url) ?>">
     <?php endforeach; endif; ?>
+    <style>
+    /* ── SaaS banners ──────────────────────────────────────────── */
+    .saas-banner{padding:.55rem 1.25rem;font-size:.83rem;line-height:1.5;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+    .saas-banner-danger{background:#FEF2F2;color:#991B1B;border-bottom:1px solid #FECACA}
+    .saas-banner-warning{background:#FFFBEB;color:#92400E;border-bottom:1px solid #FDE68A}
+    .saas-banner-info{background:#EFF6FF;color:#1E40AF;border-bottom:1px solid #BFDBFE}
+    .saas-banner-btn{display:inline-block;padding:.2rem .75rem;background:currentColor;color:#fff!important;border-radius:4px;font-size:.78rem;font-weight:600;text-decoration:none;opacity:1}
+    .saas-banner-danger .saas-banner-btn{background:#DC2626;color:#fff!important}
+    .saas-banner-warning .saas-banner-btn{background:#D97706;color:#fff!important}
+    .saas-banner-info .saas-banner-btn{background:#2563EB;color:#fff!important}
+    /* ── Plan badge ───────────────────────────────────────────── */
+    .plan-badge{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.05em;padding:.1rem .45rem;border-radius:50px;color:#fff;text-transform:uppercase;vertical-align:middle}
+    /* ── Locked nav item ──────────────────────────────────────── */
+    .nav-item-locked{cursor:pointer;opacity:.55;pointer-events:all}
+    .nav-item-locked:hover{opacity:.8;background:var(--nav-hover)}
+    /* ── Upgrade button ───────────────────────────────────────── */
+    .btn-upgrade{background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff;border:none;font-size:.78rem}
+    .btn-upgrade:hover{background:linear-gradient(135deg,#6D28D9,#9333EA);color:#fff}
+    /* ── Upgrade modal ────────────────────────────────────────── */
+    .upgrade-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:none;align-items:center;justify-content:center}
+    .upgrade-modal-overlay.active{display:flex}
+    .upgrade-modal{background:#fff;border-radius:16px;padding:2.5rem 2rem 2rem;max-width:420px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative}
+    .upgrade-modal-icon{font-size:2.8rem;margin-bottom:.5rem}
+    .upgrade-modal h3{font-size:1.25rem;font-weight:700;color:#111827;margin:0 0 .5rem}
+    .upgrade-modal p{color:#6B7280;font-size:.9rem;margin:0 0 1.5rem}
+    .upgrade-modal-plans{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1.25rem}
+    .upgrade-plan-card{border:2px solid var(--border);border-radius:10px;padding:.75rem .5rem;cursor:pointer;transition:.15s}
+    .upgrade-plan-card:hover,.upgrade-plan-card.selected{border-color:#7C3AED;background:#F5F3FF}
+    .upgrade-plan-name{font-weight:700;font-size:.82rem;color:#1F2937}
+    .upgrade-plan-price{font-size:.75rem;color:#6B7280;margin-top:.15rem}
+    .upgrade-modal-close{position:absolute;top:.75rem;right:.75rem;background:none;border:none;font-size:1.4rem;cursor:pointer;color:#9CA3AF;line-height:1}
+    /* ── Free watermark ───────────────────────────────────────── */
+    .saas-watermark{position:fixed;top:50%;right:-30px;transform:translateY(-50%) rotate(90deg);font-size:4rem;font-weight:900;color:rgba(0,0,0,.03);pointer-events:none;z-index:1;letter-spacing:.1em;user-select:none;white-space:nowrap}
+    /* ── Usage meter bars ─────────────────────────────────────── */
+    .usage-meter{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin:.25rem 0 .1rem}
+    .usage-meter-fill{height:100%;border-radius:3px;background:var(--primary);transition:.3s}
+    .usage-meter-fill.warn{background:#D97706}
+    .usage-meter-fill.full{background:#DC2626}
+    /* ── Impersonation banner ─────────────────────────────────── */
+    .impersonation-banner{background:#7C3AED;color:#fff;padding:.45rem 1.25rem;font-size:.8rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+    .impersonation-banner a{color:#E9D5FF;font-weight:600;text-decoration:underline}
+    </style>
 </head>
 <body>
+<?php if ($_layout_is_free): ?>
+<div class="saas-watermark">AB IT</div>
+<?php endif; ?>
+
+<?php if (isImpersonating()): ?>
+<div class="impersonation-banner">
+    <span>🔍 Impersonating: <strong><?= e($_layout_farm_name) ?></strong> — you are viewing as CEO</span>
+    <form method="POST" action="/modules/super_admin/end_impersonation.php" style="margin:0;display:inline">
+        <?= csrfField() ?>
+        <button type="submit" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:.25rem .75rem;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600">
+            Exit Impersonation
+        </button>
+    </form>
+</div>
+<?php endif; ?>
+
+<!-- Upgrade Modal -->
+<div class="upgrade-modal-overlay" id="upgradeModalOverlay">
+    <div class="upgrade-modal">
+        <button class="upgrade-modal-close" onclick="closeUpgradeModal()">&#x2715;</button>
+        <div class="upgrade-modal-icon">🚀</div>
+        <h3>Upgrade Your Plan</h3>
+        <p id="upgradeModalMsg">Upgrade your plan to unlock this feature.</p>
+        <div class="upgrade-modal-plans">
+            <div class="upgrade-plan-card selected">
+                <div class="upgrade-plan-name">Basic</div>
+                <div class="upgrade-plan-price">৳499/mo</div>
+            </div>
+            <div class="upgrade-plan-card">
+                <div class="upgrade-plan-name">Pro</div>
+                <div class="upgrade-plan-price">৳999/mo</div>
+            </div>
+            <div class="upgrade-plan-card">
+                <div class="upgrade-plan-name">Enterprise</div>
+                <div class="upgrade-plan-price">৳2499/mo</div>
+            </div>
+        </div>
+        <a href="/modules/subscription/index.php" class="btn btn-primary btn-block" style="background:linear-gradient(135deg,#7C3AED,#A855F7);border:none">
+            View Plans &amp; Upgrade
+        </a>
+        <p style="font-size:.75rem;color:#9CA3AF;margin:.75rem 0 0">Contact AB IT: <strong>support@abit.com.bd</strong></p>
+    </div>
+</div>
+
 <div class="layout">
 
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -54,6 +144,7 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 <?php if ($_layout_farm): ?>
                 <br><span style="font-size:.62rem;font-weight:500;opacity:.7;letter-spacing:.02em"><?= e($_layout_farm['farm_code'] ?? '') ?></span>
                 <?php endif; ?>
+                <br><?= farmPlanBadge() ?>
             </span>
         </a>
 
@@ -151,7 +242,8 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
 
             <!-- Finance -->
             <span class="nav-section-label">Finance &amp; Reports</span>
-            <?php if ($_module_enabled('finance') && $_can(['admin', 'accountant'])): ?>
+            <?php if ($_can(['admin', 'accountant'])): ?>
+            <?php if ($_module_enabled('finance') && farmCanFinance()): ?>
             <a href="/modules/finance/index.php" class="nav-item<?= $_nav_active('finance') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                 Finance
@@ -160,12 +252,19 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 Finance Charts
             </a>
+            <?php elseif ($_layout_is_free): ?>
+            <?= lockedNavItem('Finance', '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>', 'Finance module') ?>
             <?php endif; ?>
-            <?php if ($_module_enabled('reports') && $_can(['admin', 'accountant'])): ?>
+            <?php endif; ?>
+            <?php if ($_can(['admin', 'accountant'])): ?>
+            <?php if ($_module_enabled('reports') && farmCanReports()): ?>
             <a href="/modules/reports/index.php" class="nav-item<?= $_nav_active('reports') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                 Reports
             </a>
+            <?php elseif ($_layout_is_free): ?>
+            <?= lockedNavItem('Reports', '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>', 'Reports & Exports') ?>
+            <?php endif; ?>
             <?php endif; ?>
 
             <!-- Alerts -->
@@ -178,12 +277,24 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
                 <?php endif; ?>
             </a>
 
+            <!-- Subscription (farm users only) -->
+            <?php if ($_layout_role !== 'superadmin'): ?>
+            <a href="/modules/subscription/index.php" class="nav-item<?= $_nav_active('subscription') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                Subscription <?= farmPlanBadge() ?>
+            </a>
+            <?php endif; ?>
+
             <!-- Super Admin -->
             <?php if ($_layout_role === 'superadmin'): ?>
             <span class="nav-section-label">Super Admin</span>
             <a href="/modules/super_admin/index.php" class="nav-item<?= $_nav_active('super_admin') ?>">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 All Farms
+            </a>
+            <a href="/modules/super_admin/revenue.php" class="nav-item<?= $_nav_active('revenue') ?>">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                Revenue
             </a>
             <?php endif; ?>
 
@@ -246,6 +357,9 @@ $_module_enabled = static fn(string $module): bool => isModuleEnabled($module);
         </header>
 
         <main class="page-content" id="pageContent">
+            <?php if ($_layout_expiry_html): ?>
+            <?= $_layout_expiry_html ?>
+            <?php endif; ?>
             <?php if ($_layout_flash): ?>
             <div class="alert alert-<?= e($_layout_flash['type']) ?>" role="alert" style="margin-bottom:1.25rem">
                 <?= e($_layout_flash['message']) ?>

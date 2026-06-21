@@ -5,6 +5,11 @@ requireRole(['admin', 'accountant']);
 requireFarmScope();
 requireModule('reports');
 
+if (!farmCanReports()) {
+    flashMessage('error', 'Reports module is not available on the Free plan. Upgrade to access.');
+    redirect('/modules/subscription/index.php');
+}
+
 $page_title = 'Reports';
 $active_nav = 'reports';
 $db = getDB();

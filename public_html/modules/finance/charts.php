@@ -5,6 +5,11 @@ requireRole(['admin', 'accountant']);
 requireFarmScope();
 requireModule('finance');
 
+if (!farmCanFinance()) {
+    flashMessage('error', 'Finance Charts require an upgraded plan. Upgrade to access.');
+    redirect('/modules/subscription/index.php');
+}
+
 $page_title = 'Finance Charts';
 $active_nav = 'finance_charts';
 $db = getDB();

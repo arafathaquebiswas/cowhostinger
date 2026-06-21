@@ -15,6 +15,13 @@ if (!$is_edit && !hasRole(['admin'])) {
     redirect('/modules/cows/index.php');
 }
 
+// Plan limit check
+if (!$is_edit && !farmCanAddCow()) {
+    $lim = farmResourceLimit('cows');
+    flashMessage('error', "Cow limit reached ({$lim['current']}/{$lim['max']}). Upgrade your plan to add more cows.");
+    redirect('/modules/cows/index.php');
+}
+
 $errors = [];
 $cow = [
     'id'             => 0,

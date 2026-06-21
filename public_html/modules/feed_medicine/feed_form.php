@@ -10,6 +10,12 @@ $item_id = (int)($_GET['id'] ?? 0);
 $is_edit = $item_id > 0;
 $existing = null;
 
+if (!$is_edit && !farmCanAddFeed()) {
+    $lim = farmResourceLimit('feed');
+    flashMessage('error', "Feed inventory limit reached ({$lim['current']}/{$lim['max']}). Upgrade your plan to add more items.");
+    redirect('/modules/feed_medicine/index.php?tab=feed');
+}
+
 $errors = [];
 $form = [
     'item_name'         => '',

@@ -9,6 +9,12 @@ $db         = getDB();
 $worker_id  = (int)($_GET['id'] ?? 0);
 $is_edit    = $worker_id > 0;
 
+if (!$is_edit && !farmCanAddWorker()) {
+    $lim = farmResourceLimit('workers');
+    flashMessage('error', "Worker limit reached ({$lim['current']}/{$lim['max']}). Upgrade your plan to add more workers.");
+    redirect('/modules/workers/index.php');
+}
+
 $errors = [];
 $form = [
     'user_id'          => '',
