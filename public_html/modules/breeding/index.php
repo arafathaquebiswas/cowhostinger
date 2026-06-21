@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action  = $_POST['action']  ?? '';
     $user_id = (int)$_SESSION['user_id'];
 
-    if ($action === 'delete_breeding' && hasRole(['admin'])) {
+    if ($action === 'delete_breeding' && hasRole(['admin', 'manager'])) {
         $br_id = (int)($_POST['br_id'] ?? 0);
         if ($br_id > 0) {
             $sel = $db->prepare("SELECT * FROM breeding_records WHERE id = ? AND " . farmFilter());
@@ -135,7 +135,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <h2>Breeding</h2>
         <p class="text-sm text-muted">Heat cycles, insemination, pregnancy &amp; calving</p>
     </div>
-    <?php if (hasRole(['admin','veterinarian','reception'])): ?>
+    <?php if (hasRole(['admin','manager','veterinarian'])): ?>
     <a href="/modules/breeding/form.php" class="btn btn-primary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Record
@@ -206,7 +206,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <h3>No breeding records found</h3>
-        <?php if (hasRole(['admin','veterinarian','reception'])): ?>
+        <?php if (hasRole(['admin','manager','veterinarian'])): ?>
         <p><a href="/modules/breeding/form.php">Add the first breeding record.</a></p>
         <?php endif; ?>
     </div>
@@ -254,7 +254,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             </td>
             <td>
                 <div style="display:flex;gap:.35rem;flex-wrap:wrap">
-                    <?php if (hasRole(['admin','veterinarian','reception'])): ?>
+                    <?php if (hasRole(['admin','manager','veterinarian'])): ?>
                     <a href="/modules/breeding/form.php?id=<?= $br['id'] ?>" class="btn btn-sm btn-secondary" title="Edit">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </a>
@@ -265,7 +265,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         Calving
                     </a>
                     <?php endif; ?>
-                    <?php if (hasRole(['admin'])): ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?>
                     <form method="POST" style="display:inline" onsubmit="return confirm('Delete this breeding record and all linked calf records?')">
                         <?= csrfField() ?>
                         <input type="hidden" name="action"   value="delete_breeding">

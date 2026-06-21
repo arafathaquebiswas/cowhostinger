@@ -6,7 +6,7 @@ requireFarmScope();
 requireModule('milk');
 
 // Accountants need to view pricing for revenue reporting; only admins can write
-if (!hasRole(['admin', 'accountant'])) {
+if (!hasRole(['admin', 'manager', 'accountant'])) {
     flashMessage('error', 'You do not have permission to view milk pricing.');
     redirect('/modules/milk/index.php');
 }

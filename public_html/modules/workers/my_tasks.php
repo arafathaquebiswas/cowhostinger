@@ -19,7 +19,7 @@ $my_worker = $my_worker_stmt->fetch();
 $view_worker_id = (int)($_GET['worker_id'] ?? 0);
 $viewing_own    = true;
 
-if (hasRole(['admin']) && $view_worker_id > 0) {
+if (hasRole(['admin', 'manager']) && $view_worker_id > 0) {
     $vw_stmt = $db->prepare(
         "SELECT w.id, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ? AND " . farmFilter('u') . " LIMIT 1"
     );
@@ -128,7 +128,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <p class="text-sm text-muted">Viewing tasks for <strong><?= e($my_worker['name']) ?></strong></p>
         <?php endif; ?>
     </div>
-    <?php if (hasRole(['admin'])): ?>
+    <?php if (hasRole(['admin', 'manager'])): ?>
     <div style="display:flex;gap:.5rem">
         <a href="/modules/workers/tasks.php" class="btn btn-secondary">All Tasks</a>
         <a href="/modules/workers/tasks.php#assign" class="btn btn-primary">
@@ -147,7 +147,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         </svg>
         <h3>No Worker Profile</h3>
         <p>Your user account does not have an associated worker profile.
-            <?= hasRole(['admin']) ? 'Visit <a href="/modules/workers/form.php">Workers</a> to create one.' : 'Contact your administrator.' ?>
+            <?= hasRole(['admin', 'manager']) ? 'Visit <a href="/modules/workers/form.php">Workers</a> to create one.' : 'Contact your administrator.' ?>
         </p>
     </div>
 </div>
@@ -223,7 +223,7 @@ foreach ($render_groups as $gkey => [$gtitle, $gicon]):
         <?php if ($task['description']): ?>
         <div class="record-card-body" style="margin-bottom:.65rem"><?= e($task['description']) ?></div>
         <?php endif; ?>
-        <?php if (!empty($next) && ($viewing_own || hasRole(['admin']))): ?>
+        <?php if (!empty($next) && ($viewing_own || hasRole(['admin', 'manager']))): ?>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
             <?php foreach ($next as $new_s => $btn_label): ?>
             <form method="POST" action="<?= e($base_url) ?>" style="display:inline">

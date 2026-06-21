@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flashMessage('error', 'Invalid request.');
         redirect('/modules/treatments/index.php');
     }
-    if (!hasRole(['admin', 'veterinarian'])) {
+    if (!hasRole(['admin', 'manager', 'veterinarian'])) {
         flashMessage('error', 'Insufficient permissions.');
         redirect('/modules/treatments/index.php');
     }

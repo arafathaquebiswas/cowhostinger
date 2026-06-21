@@ -257,14 +257,14 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 </button>
                 <div class="nav-acc-body">
                     <a href="/modules/cows/index.php" class="nav-item<?= $_nav_active('cows') ?>">All Cows</a>
-                    <?php if ($_can(['admin'])): ?>
+                    <?php if ($_can(['admin','manager'])): ?>
                     <a href="/modules/cows/form.php" class="nav-item<?= $_nav_active('cow_form') ?>">Add Cow</a>
                     <a href="/modules/cows/purchases.php" class="nav-item<?= $_nav_active('cow_purchases') ?>">Purchases</a>
                     <?php endif; ?>
-                    <?php if ($_can(['admin','veterinarian'])): ?>
+                    <?php if ($_can(['admin','manager','veterinarian'])): ?>
                     <a href="/modules/cows/death_record.php" class="nav-item<?= $_nav_active('cow_deaths') ?>">Deaths</a>
                     <?php endif; ?>
-                    <?php if ($_module_enabled('breeding') && $_can(['admin','veterinarian','reception'])): ?>
+                    <?php if ($_module_enabled('breeding') && $_can(['admin','manager','veterinarian'])): ?>
                     <a href="/modules/breeding/index.php" class="nav-item<?= $_nav_active('breeding') ?>">Breeding</a>
                     <?php endif; ?>
                 </div>
@@ -274,7 +274,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  🥛  MILK
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_module_enabled('milk') && $_can(['admin','worker','veterinarian','accountant'])): ?>
+            <?php if ($_module_enabled('milk') && $_can(['admin','manager','worker','veterinarian','accountant'])): ?>
             <div class="nav-acc<?= $_acc(['milk','milk_analytics','milk_pricing']) ?>" id="nacc-milk">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-milk')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8l2 6H6L8 2z"/><path d="M6 8v12a2 2 0 002 2h8a2 2 0 002-2V8"/></svg>
@@ -282,11 +282,11 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <span class="nav-acc-chv">›</span>
                 </button>
                 <div class="nav-acc-body">
-                    <?php if ($_can(['admin','worker','veterinarian'])): ?>
+                    <?php if ($_can(['admin','manager','worker','veterinarian'])): ?>
                     <a href="/modules/milk/record.php" class="nav-item">Add Milk Entry</a>
                     <a href="/modules/milk/index.php" class="nav-item<?= $_nav_active('milk') ?>">Milk Records</a>
                     <?php endif; ?>
-                    <?php if ($_can(['admin','accountant'])): ?>
+                    <?php if ($_can(['admin','manager','accountant'])): ?>
                     <a href="/modules/milk/pricing.php" class="nav-item<?= $_nav_active('milk_pricing') ?>">Pricing</a>
                     <a href="/modules/milk/analytics.php" class="nav-item<?= $_nav_active('milk_analytics') ?>">Analytics</a>
                     <?php endif; ?>
@@ -297,7 +297,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  🌾  FEED
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_module_enabled('feed_medicine') && $_can(['admin','worker','veterinarian','accountant'])): ?>
+            <?php if ($_module_enabled('feed_medicine') && $_can(['admin','manager','worker','veterinarian','accountant'])): ?>
             <div class="nav-acc<?= $_acc(['feed_medicine']) ?>" id="nacc-feed">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-feed')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
@@ -314,7 +314,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  💉  HEALTH
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_can(['admin','veterinarian','worker','reception'])): ?>
+            <?php if ($_can(['admin','manager','veterinarian','worker'])): ?>
             <div class="nav-acc<?= $_acc(['diagnosis','treatments','veterinarians']) ?>" id="nacc-health">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-health')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -322,13 +322,13 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <span class="nav-acc-chv">›</span>
                 </button>
                 <div class="nav-acc-body">
-                    <?php if ($_module_enabled('cows') && $_can(['admin','veterinarian','worker','reception'])): ?>
+                    <?php if ($_module_enabled('cows') && $_can(['admin','manager','veterinarian','worker'])): ?>
                     <a href="/modules/treatments/index.php" class="nav-item<?= $_nav_active('treatments') ?>">Treatments</a>
                     <?php endif; ?>
-                    <?php if ($_module_enabled('diagnosis') && $_can(['admin','veterinarian'])): ?>
+                    <?php if ($_module_enabled('diagnosis') && $_can(['admin','manager','veterinarian'])): ?>
                     <a href="/modules/diagnosis/index.php" class="nav-item<?= $_nav_active('diagnosis') ?>">Diagnosis</a>
                     <?php endif; ?>
-                    <?php if ($_can(['admin','accountant'])): ?>
+                    <?php if ($_can(['admin','manager','accountant'])): ?>
                     <a href="/modules/treatments/veterinarians.php" class="nav-item<?= $_nav_active('veterinarians') ?>">Veterinarians</a>
                     <?php endif; ?>
                 </div>
@@ -338,7 +338,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  💰  BUSINESS  (Sales, Buyers, Sellers)
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_module_enabled('sales') && $_can(['admin','accountant','reception'])): ?>
+            <?php if ($_module_enabled('sales') && $_can(['admin','manager','accountant'])): ?>
             <div class="nav-acc<?= $_acc(['sales','buyers','sellers']) ?>" id="nacc-biz">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-biz')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
@@ -347,7 +347,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 </button>
                 <div class="nav-acc-body">
                     <a href="/modules/sales/index.php" class="nav-item<?= $_nav_active('sales') ?>">Sales</a>
-                    <?php if ($_can(['admin','accountant'])): ?>
+                    <?php if ($_can(['admin','manager','accountant'])): ?>
                     <a href="/modules/sales/buyers.php" class="nav-item<?= $_nav_active('buyers') ?>">Buyers</a>
                     <a href="/modules/sales/sellers.php" class="nav-item<?= $_nav_active('sellers') ?>">Sellers</a>
                     <?php endif; ?>
@@ -358,7 +358,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  👷  WORKERS
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_module_enabled('workers') && $_can(['admin'])): ?>
+            <?php if ($_module_enabled('workers') && $_can(['admin','manager'])): ?>
             <div class="nav-acc<?= $_acc(['workers','my_tasks']) ?>" id="nacc-workers">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-workers')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
@@ -374,7 +374,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  📊  FINANCE & REPORTS
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_can(['admin','accountant'])): ?>
+            <?php if ($_can(['admin','manager','accountant'])): ?>
             <div class="nav-acc<?= $_acc(['finance','finance_charts','reports','profit_engine','profit_monthly','profit_yearly','profit_compare','profitability']) ?>" id="nacc-finance">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-finance')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -442,7 +442,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                         <span class="nav-badge"><?= $_layout_alert_count > 99 ? '99+' : $_layout_alert_count ?></span>
                         <?php endif; ?>
                     </a>
-                    <?php if ($_can(['admin','accountant','veterinarian','reception'])): ?>
+                    <?php if ($_can(['admin','manager','accountant','veterinarian'])): ?>
                     <a href="/modules/support/index.php" class="nav-item<?= $_nav_active('support') ?>">Support</a>
                     <?php endif; ?>
                     <?php if (!isSaasUser()): ?>
@@ -542,7 +542,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 <span class="qaf-ico">🌾</span> Add Feed
             </a>
             <?php endif; ?>
-            <?php if ($_can(['admin','veterinarian','worker','reception'])): ?>
+            <?php if ($_can(['admin','manager','veterinarian','worker'])): ?>
             <a href="/modules/treatments/form.php" class="qaf-item">
                 <span class="qaf-ico">💊</span> Add Treatment
             </a>

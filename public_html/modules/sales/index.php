@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
-requireRole(['admin', 'accountant']);
+requireRole(['admin', 'manager', 'accountant']);
 requireFarmScope();
 requireModule('sales');
 
@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flashMessage('error', 'Invalid request.');
         redirect('/modules/sales/index.php');
     }
-    if (!hasRole(['admin'])) {
+    if (!hasRole(['admin', 'manager'])) {
         flashMessage('error', 'Insufficient permissions.');
         redirect('/modules/sales/index.php');
     }
@@ -233,7 +233,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <th>Purchase Price</th>
                     <th>Profit / Loss</th>
                     <th>Notes</th>
-                    <?php if (hasRole(['admin'])): ?><th style="width:60px">Del</th><?php endif; ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?><th style="width:60px">Del</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -255,7 +255,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.83rem">
                     <?= $cs['notes'] ? e($cs['notes']) : '—' ?>
                 </td>
-                <?php if (hasRole(['admin'])): ?>
+                <?php if (hasRole(['admin', 'manager'])): ?>
                 <td>
                     <form method="POST" onsubmit="return confirm('Delete this sale record? The cow status will be restored to Ready for Sale.')">
                         <?= csrfField() ?>
@@ -312,7 +312,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <th>Price / Kg</th>
                     <th>Revenue</th>
                     <th>Notes</th>
-                    <?php if (hasRole(['admin'])): ?><th style="width:60px">Del</th><?php endif; ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?><th style="width:60px">Del</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -332,7 +332,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.83rem">
                     <?= $ms['notes'] ? e($ms['notes']) : '—' ?>
                 </td>
-                <?php if (hasRole(['admin'])): ?>
+                <?php if (hasRole(['admin', 'manager'])): ?>
                 <td>
                     <form method="POST" onsubmit="return confirm('Delete this meat sale record?')">
                         <?= csrfField() ?>

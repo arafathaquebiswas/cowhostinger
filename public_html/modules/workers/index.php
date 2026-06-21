@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
-requireRole(['admin', 'reception']);
+requireRole(['admin', 'manager']);
 requireFarmScope();
 requireModule('workers');
 
@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $worker_id = (int)($_POST['worker_id'] ?? 0);
     $user_id   = (int)$_SESSION['user_id'];
 
-    if ($action === 'toggle_status' && hasRole(['admin']) && $worker_id > 0) {
+    if ($action === 'toggle_status' && hasRole(['admin', 'manager']) && $worker_id > 0) {
         $sel = $db->prepare("SELECT w.id, w.status, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ? AND " . farmFilter('u'));
         $sel->execute([$worker_id]);
         $w = $sel->fetch();
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($action === 'delete' && hasRole(['admin']) && $worker_id > 0) {
+    if ($action === 'delete' && hasRole(['admin', 'manager']) && $worker_id > 0) {
         $sel = $db->prepare("SELECT w.id, u.name FROM workers w JOIN users u ON u.id = w.user_id WHERE w.id = ? AND " . farmFilter('u'));
         $sel->execute([$worker_id]);
         $w = $sel->fetch();
@@ -143,7 +143,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <h2>Workers</h2>
         <p class="text-sm text-muted"><?= (int)$stats['total'] ?> worker profile<?= $stats['total'] != 1 ? 's' : '' ?></p>
     </div>
-    <?php if (hasRole(['admin'])): ?>
+    <?php if (hasRole(['admin', 'manager'])): ?>
     <a href="/modules/workers/form.php" class="btn btn-primary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Worker
@@ -216,7 +216,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
         </svg>
         <h3>No workers found</h3>
-        <p><?= hasRole(['admin'])
+        <p><?= hasRole(['admin', 'manager'])
             ? 'No worker profiles yet. <a href="/modules/workers/form.php">Add the first worker.</a>'
             : 'No workers match the current filters.' ?></p>
     </div>
@@ -271,7 +271,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                        class="btn btn-sm btn-secondary" title="View tasks">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
                     </a>
-                    <?php if (hasRole(['admin'])): ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?>
                     <a href="/modules/workers/form.php?id=<?= $w['worker_id'] ?>"
                        class="btn btn-sm btn-secondary" title="Edit">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>

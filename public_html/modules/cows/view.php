@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id = (int)$_SESSION['user_id'];
 
     // Add weight log
-    if ($action === 'add_weight' && hasRole(['admin', 'worker', 'veterinarian'])) {
+    if ($action === 'add_weight' && hasRole(['admin', 'manager', 'worker', 'veterinarian'])) {
         $weight = (float)trim($_POST['weight'] ?? '0');
         if ($weight <= 0 || $weight > 9999) {
             flashMessage('error', 'Weight must be between 0.01 and 9999 kg.');
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Mark for sale
-    if ($action === 'mark_for_sale' && hasRole(['admin', 'accountant'])) {
+    if ($action === 'mark_for_sale' && hasRole(['admin', 'manager', 'accountant'])) {
         if (in_array($cow['status'], ['sold', 'deceased'], true)) {
             flashMessage('error', 'This cow cannot be marked for sale (status: ' . $cow['status'] . ').');
         } else {
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Delete cow
-    if ($action === 'delete' && hasRole(['admin'])) {
+    if ($action === 'delete' && hasRole(['admin', 'manager'])) {
         try {
             $db->prepare("DELETE FROM cows WHERE id = ? AND " . farmFilter())->execute([$cow_id]);
             auditLog($user_id, 'DELETE_COW', 'cows', $cow_id, $cow, null);
@@ -248,14 +248,14 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 
         <!-- Action buttons -->
         <div class="cow-actions">
-            <?php if (hasRole(['admin', 'veterinarian'])): ?>
+            <?php if (hasRole(['admin', 'manager', 'veterinarian'])): ?>
             <a href="/modules/cows/form.php?id=<?= $cow_id ?>" class="btn btn-secondary btn-sm">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 Edit
             </a>
             <?php endif; ?>
 
-            <?php if (hasRole(['admin', 'accountant']) && !in_array($cow['status'], ['ready_for_sale','sold','deceased'], true)): ?>
+            <?php if (hasRole(['admin', 'manager', 'accountant']) && !in_array($cow['status'], ['ready_for_sale','sold','deceased'], true)): ?>
             <form method="POST" style="display:inline"
                   onsubmit="return confirm('Mark cow #<?= e(addslashes($cow['tag_number'])) ?> as Ready for Sale?')">
                 <?= csrfField() ?>
@@ -267,7 +267,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             </form>
             <?php endif; ?>
 
-            <?php if (hasRole(['admin'])): ?>
+            <?php if (hasRole(['admin', 'manager'])): ?>
             <form method="POST" style="display:inline"
                   onsubmit="return confirm('Permanently delete cow #<?= e(addslashes($cow['tag_number'])) ?>? This cannot be undone.')">
                 <?= csrfField() ?>
@@ -341,7 +341,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <canvas id="weight-chart"></canvas>
         </div>
 
-        <?php if (hasRole(['admin', 'worker', 'veterinarian'])): ?>
+        <?php if (hasRole(['admin', 'manager', 'worker', 'veterinarian'])): ?>
         <!-- Add weight form -->
         <div class="section-heading" style="margin-top:1.5rem">Record New Weight</div>
         <form method="POST" action="/modules/cows/view.php?id=<?= $cow_id ?>&tab=weight"

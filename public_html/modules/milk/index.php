@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/modules/milk/index.php');
     }
 
-    if ($_POST['action'] === 'delete' && hasRole(['admin'])) {
+    if ($_POST['action'] === 'delete' && hasRole(['admin', 'manager'])) {
         $del_id = (int)($_POST['record_id'] ?? 0);
         if ($del_id > 0) {
             $sel = $db->prepare("SELECT id, cow_id, liters, recorded_at FROM milk_records WHERE id = ? AND " . farmFilter());
@@ -301,7 +301,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <th>Fat %</th>
                 <th>Quality</th>
                 <th>Recorded By</th>
-                <?php if (hasRole(['admin'])): ?><th style="width:60px"></th><?php endif; ?>
+                <?php if (hasRole(['admin', 'manager'])): ?><th style="width:60px"></th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -323,7 +323,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <?php endif; ?>
             </td>
             <td><?= e($r['recorded_by_name']) ?></td>
-            <?php if (hasRole(['admin'])): ?>
+            <?php if (hasRole(['admin', 'manager'])): ?>
             <td>
                 <form method="POST" style="display:inline"
                       onsubmit="return confirm('Delete this milk record?')">

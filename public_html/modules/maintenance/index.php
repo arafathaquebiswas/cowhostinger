@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flashMessage('error', 'Invalid request.');
         redirect('/modules/maintenance/index.php');
     }
-    if (!hasRole(['admin'])) {
+    if (!hasRole(['admin', 'manager'])) {
         flashMessage('error', 'Insufficient permissions.');
         redirect('/modules/maintenance/index.php');
     }
@@ -211,7 +211,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <h2>Maintenance</h2>
         <p class="text-sm text-muted">Equipment logs, farm areas &amp; area purchases</p>
     </div>
-    <?php if (hasRole(['admin'])): ?>
+    <?php if (hasRole(['admin', 'manager'])): ?>
     <div style="display:flex;gap:.5rem">
         <a href="/modules/maintenance/log_form.php"      class="btn btn-primary btn-sm">+ Log</a>
         <a href="/modules/maintenance/area_form.php"     class="btn btn-secondary btn-sm">+ Area</a>
@@ -300,7 +300,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div class="empty-state">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
             <h3>No maintenance logs found</h3>
-            <?php if (hasRole(['admin'])): ?><p><a href="/modules/maintenance/log_form.php">Add the first log entry.</a></p><?php endif; ?>
+            <?php if (hasRole(['admin', 'manager'])): ?><p><a href="/modules/maintenance/log_form.php">Add the first log entry.</a></p><?php endif; ?>
         </div>
         <?php else: ?>
         <div style="overflow-x:auto">
@@ -313,7 +313,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <th>Cost</th>
                     <th>Scheduled</th>
                     <th>Completed</th>
-                    <?php if (hasRole(['admin'])): ?><th style="width:110px">Actions</th><?php endif; ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?><th style="width:110px">Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -343,7 +343,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <td><?= $log['cost'] ? e(formatCurrency((float)$log['cost'])) : '—' ?></td>
                 <td style="white-space:nowrap"><?= $log['scheduled_date'] ? e(formatDate($log['scheduled_date'])) : '—' ?></td>
                 <td style="white-space:nowrap"><?= $log['completed_date'] ? e(formatDate($log['completed_date'])) : '—' ?></td>
-                <?php if (hasRole(['admin'])): ?>
+                <?php if (hasRole(['admin', 'manager'])): ?>
                 <td>
                     <div style="display:flex;gap:.35rem;flex-wrap:wrap">
                         <a href="/modules/maintenance/log_form.php?id=<?= $log['id'] ?>" class="btn btn-sm btn-secondary" title="Edit">
@@ -397,7 +397,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div class="empty-state">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <h3>No farm areas defined</h3>
-            <?php if (hasRole(['admin'])): ?><p><a href="/modules/maintenance/area_form.php">Add the first farm area.</a></p><?php endif; ?>
+            <?php if (hasRole(['admin', 'manager'])): ?><p><a href="/modules/maintenance/area_form.php">Add the first farm area.</a></p><?php endif; ?>
         </div>
         <?php else: ?>
         <div style="overflow-x:auto">
@@ -410,7 +410,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <th>Maint. Logs</th>
                     <th>Purchases</th>
                     <th>Notes</th>
-                    <?php if (hasRole(['admin'])): ?><th style="width:90px">Actions</th><?php endif; ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?><th style="width:90px">Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -430,7 +430,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <?php else: ?><span class="text-muted">0</span><?php endif; ?>
                 </td>
                 <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.83rem"><?= $area['notes'] ? e($area['notes']) : '—' ?></td>
-                <?php if (hasRole(['admin'])): ?>
+                <?php if (hasRole(['admin', 'manager'])): ?>
                 <td>
                     <div style="display:flex;gap:.35rem">
                         <a href="/modules/maintenance/area_form.php?id=<?= $area['id'] ?>" class="btn btn-sm btn-secondary" title="Edit">
@@ -489,7 +489,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             Total: <strong><?= e(formatCurrency($purch_total_cost)) ?></strong>
             (<?= number_format($purch_total) ?> record<?= $purch_total!==1?'s':'' ?>)
         </span>
-        <?php if (hasRole(['admin'])): ?>
+        <?php if (hasRole(['admin', 'manager'])): ?>
         <a href="/modules/maintenance/purchase_form.php" class="btn btn-primary btn-sm">+ Purchase</a>
         <?php endif; ?>
     </div>
@@ -501,7 +501,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/>
             </svg>
             <h3>No purchases recorded</h3>
-            <?php if (hasRole(['admin'])): ?><p><a href="/modules/maintenance/purchase_form.php">Record an area purchase.</a></p><?php endif; ?>
+            <?php if (hasRole(['admin', 'manager'])): ?><p><a href="/modules/maintenance/purchase_form.php">Record an area purchase.</a></p><?php endif; ?>
         </div>
         <?php else: ?>
         <div style="overflow-x:auto">
@@ -513,7 +513,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <th>Item</th>
                     <th>Cost</th>
                     <th>Notes</th>
-                    <?php if (hasRole(['admin'])): ?><th style="width:90px">Actions</th><?php endif; ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?><th style="width:90px">Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -524,7 +524,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <td style="font-weight:500"><?= e($p['item']) ?></td>
                 <td style="font-weight:700"><?= e(formatCurrency((float)$p['cost'])) ?></td>
                 <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.83rem"><?= $p['notes'] ? e($p['notes']) : '—' ?></td>
-                <?php if (hasRole(['admin'])): ?>
+                <?php if (hasRole(['admin', 'manager'])): ?>
                 <td>
                     <div style="display:flex;gap:.35rem">
                         <a href="/modules/maintenance/purchase_form.php?id=<?= $p['id'] ?>" class="btn btn-sm btn-secondary" title="Edit">

@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
-requireRole(['admin', 'worker', 'veterinarian', 'accountant']);
+requireRole(['admin', 'manager', 'worker', 'veterinarian', 'accountant']);
 requireFarmScope();
 requireModule('feed_medicine');
 requireNotBlocked();
@@ -287,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── DELETE single feed entry ──────────────────────────────────────────────
-    if ($action === 'delete_feed_log' && hasRole(['admin'])) {
+    if ($action === 'delete_feed_log' && hasRole(['admin', 'manager'])) {
         $log_id = (int)($_POST['log_id'] ?? 0);
         if ($log_id > 0) {
             $db->prepare("DELETE FROM feed_logs WHERE id=? AND farm_id=?")->execute([$log_id, fid()]);
@@ -298,7 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── DELETE single medicine entry ──────────────────────────────────────────
-    if ($action === 'delete_med_log' && hasRole(['admin'])) {
+    if ($action === 'delete_med_log' && hasRole(['admin', 'manager'])) {
         $log_id = (int)($_POST['log_id'] ?? 0);
         if ($log_id > 0) {
             $db->prepare("DELETE FROM medicine_logs WHERE id=? AND farm_id=?")->execute([$log_id, fid()]);
@@ -309,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── DELETE feed batch ─────────────────────────────────────────────────────
-    if ($action === 'delete_batch_feed' && hasRole(['admin'])) {
+    if ($action === 'delete_batch_feed' && hasRole(['admin', 'manager'])) {
         $bid = trim($_POST['batch_id'] ?? '');
         if ($bid !== '' && preg_match('/^FEED-[\w\-]+$/', $bid)) {
             $del = $db->prepare("DELETE FROM feed_logs WHERE batch_id=? AND farm_id=?");
@@ -321,7 +321,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── DELETE medicine batch ─────────────────────────────────────────────────
-    if ($action === 'delete_batch_med' && hasRole(['admin'])) {
+    if ($action === 'delete_batch_med' && hasRole(['admin', 'manager'])) {
         $bid = trim($_POST['batch_id'] ?? '');
         if ($bid !== '' && preg_match('/^MED-[\w\-]+$/', $bid)) {
             $del = $db->prepare("DELETE FROM medicine_logs WHERE batch_id=? AND farm_id=?");
@@ -501,7 +501,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
     </div>
     <div style="display:flex;gap:.5rem">
         <a href="/modules/feed_medicine/index.php" class="btn btn-secondary btn-sm">Manage Stock</a>
-        <?php if (hasRole(['admin'])): ?>
+        <?php if (hasRole(['admin', 'manager'])): ?>
         <a href="/modules/feed_medicine/feed_form.php"     class="btn btn-secondary btn-sm">+ Feed Stock</a>
         <a href="/modules/feed_medicine/medicine_form.php" class="btn btn-secondary btn-sm">+ Med Stock</a>
         <?php endif; ?>
@@ -901,7 +901,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div style="overflow-x:auto">
             <table class="table table-sm" style="font-size:.82rem">
                 <thead>
-                    <tr><th>Date</th><th>Cow</th><th>Feed Item</th><th>Qty (kg)</th><th>Cost/kg</th><th>Total</th><th>Batch</th><th>By</th><?php if (hasRole(['admin'])): ?><th></th><?php endif; ?></tr>
+                    <tr><th>Date</th><th>Cow</th><th>Feed Item</th><th>Qty (kg)</th><th>Cost/kg</th><th>Total</th><th>Batch</th><th>By</th><?php if (hasRole(['admin', 'manager'])): ?><th></th><?php endif; ?></tr>
                 </thead>
                 <tbody>
                 <?php if (empty($feed_logs)): ?>
@@ -922,7 +922,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                             <?php else: ?>—<?php endif; ?>
                         </td>
                         <td><?= e($log['recorder_name'] ?? '—') ?></td>
-                        <?php if (hasRole(['admin'])): ?>
+                        <?php if (hasRole(['admin', 'manager'])): ?>
                         <td>
                             <form method="POST" onsubmit="return confirm('Delete this entry?')" style="margin:0">
                                 <?= csrfField() ?>
@@ -950,7 +950,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div style="overflow-x:auto">
             <table class="table table-sm" style="font-size:.82rem">
                 <thead>
-                    <tr><th>Date</th><th>Cow</th><th>Medicine</th><th>Dosage</th><th>Unit</th><th>Cost</th><th>Batch</th><th>By</th><?php if (hasRole(['admin'])): ?><th></th><?php endif; ?></tr>
+                    <tr><th>Date</th><th>Cow</th><th>Medicine</th><th>Dosage</th><th>Unit</th><th>Cost</th><th>Batch</th><th>By</th><?php if (hasRole(['admin', 'manager'])): ?><th></th><?php endif; ?></tr>
                 </thead>
                 <tbody>
                 <?php if (empty($med_logs)): ?>
@@ -969,7 +969,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                                class="batch-pill med"><?= e(substr($log['batch_id'],4,13)) ?>…</a>
                         </td>
                         <td><?= e($log['recorder_name'] ?? '—') ?></td>
-                        <?php if (hasRole(['admin'])): ?>
+                        <?php if (hasRole(['admin', 'manager'])): ?>
                         <td>
                             <form method="POST" onsubmit="return confirm('Delete this entry?')" style="margin:0">
                                 <?= csrfField() ?>
@@ -997,7 +997,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         </div>
         <div style="overflow-x:auto">
             <table class="table table-sm" style="font-size:.82rem">
-                <thead><tr><th>Batch</th><th>Date</th><th>Feed</th><th>Cows</th><th>Total kg</th><th>Total Cost</th><th>Avg/cow</th><?php if (hasRole(['admin'])): ?><th></th><?php endif; ?></tr></thead>
+                <thead><tr><th>Batch</th><th>Date</th><th>Feed</th><th>Cows</th><th>Total kg</th><th>Total Cost</th><th>Avg/cow</th><?php if (hasRole(['admin', 'manager'])): ?><th></th><?php endif; ?></tr></thead>
                 <tbody>
                 <?php
                 $fb_stmt = $db->prepare(
@@ -1025,7 +1025,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         <td><?= number_format($b['total_kg'],1) ?> kg</td>
                         <td><?= $b['total_cost'] > 0 ? '৳'.number_format($b['total_cost'],0) : '—' ?></td>
                         <td><?= number_format($b['avg_kg'],2) ?> kg</td>
-                        <?php if (hasRole(['admin'])): ?>
+                        <?php if (hasRole(['admin', 'manager'])): ?>
                         <td>
                             <form method="POST" onsubmit="return confirm('Delete all <?= $b['cow_count'] ?> entries in this batch?')">
                                 <?= csrfField() ?>
@@ -1051,7 +1051,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         </div>
         <div style="overflow-x:auto">
             <table class="table table-sm" style="font-size:.82rem">
-                <thead><tr><th>Batch</th><th>Date</th><th>Medicine</th><th>Cows</th><th>Total Dose</th><th>Total Cost</th><?php if (hasRole(['admin'])): ?><th></th><?php endif; ?></tr></thead>
+                <thead><tr><th>Batch</th><th>Date</th><th>Medicine</th><th>Cows</th><th>Total Dose</th><th>Total Cost</th><?php if (hasRole(['admin', 'manager'])): ?><th></th><?php endif; ?></tr></thead>
                 <tbody>
                 <?php
                 $mb_stmt = $db->prepare(
@@ -1075,7 +1075,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         <td><?= $b['cow_count'] ?></td>
                         <td><?= number_format($b['total_dose'],3) ?> <?= e($b['unit'] ?? '') ?></td>
                         <td><?= $b['total_cost'] > 0 ? '<strong style="color:#7C3AED">৳'.number_format($b['total_cost'],0).'</strong>' : '—' ?></td>
-                        <?php if (hasRole(['admin'])): ?>
+                        <?php if (hasRole(['admin', 'manager'])): ?>
                         <td>
                             <form method="POST" onsubmit="return confirm('Delete all <?= $b['cow_count'] ?> medicine entries in this batch?')">
                                 <?= csrfField() ?>

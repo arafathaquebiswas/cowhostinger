@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $eq_id   = (int)($_POST['equipment_id'] ?? 0);
     $user_id = (int)$_SESSION['user_id'];
 
-    if ($action === 'update_status' && hasRole(['admin']) && $eq_id > 0) {
+    if ($action === 'update_status' && hasRole(['admin', 'manager']) && $eq_id > 0) {
         $new_status = sanitize($_POST['new_status'] ?? '');
         $valid      = ['operational', 'maintenance', 'damaged', 'disposed'];
         if (in_array($new_status, $valid, true)) {
@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/modules/equipment/index.php');
     }
 
-    if ($action === 'delete' && hasRole(['admin']) && $eq_id > 0) {
+    if ($action === 'delete' && hasRole(['admin', 'manager']) && $eq_id > 0) {
         $sel = $db->prepare("SELECT id, name FROM equipment WHERE id = ? AND " . farmFilter());
         $sel->execute([$eq_id]);
         $eq = $sel->fetch();
@@ -185,7 +185,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <h2>Equipment</h2>
         <p class="text-sm text-muted"><?= $total_all ?> piece<?= $total_all !== 1 ? 's' : '' ?> of equipment</p>
     </div>
-    <?php if (hasRole(['admin'])): ?>
+    <?php if (hasRole(['admin', 'manager'])): ?>
     <a href="/modules/equipment/form.php" class="btn btn-primary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Equipment
@@ -289,7 +289,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/>
         </svg>
         <h3>No equipment found</h3>
-        <p><?= hasRole(['admin']) ? '<a href="/modules/equipment/form.php">Add the first piece of equipment.</a>' : 'No equipment records yet.' ?></p>
+        <p><?= hasRole(['admin', 'manager']) ? '<a href="/modules/equipment/form.php">Add the first piece of equipment.</a>' : 'No equipment records yet.' ?></p>
     </div>
     <?php else: ?>
     <div style="overflow-x:auto">
@@ -301,7 +301,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <th>Purchase Date</th>
                 <th>Last Maintenance</th>
                 <th>Lifespan</th>
-                <?php if (hasRole(['admin'])): ?><th style="width:160px">Actions</th><?php endif; ?>
+                <?php if (hasRole(['admin', 'manager'])): ?><th style="width:160px">Actions</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -334,7 +334,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <td><?= $eq['purchase_date'] ? e(formatDate($eq['purchase_date'])) : '—' ?></td>
             <td><?= $eq['last_maintenance_date'] ? e(formatDate($eq['last_maintenance_date'])) : '—' ?></td>
             <td><?= $eq['lifespan_months'] ? e($eq['lifespan_months']) . ' mo' : '—' ?></td>
-            <?php if (hasRole(['admin'])): ?>
+            <?php if (hasRole(['admin', 'manager'])): ?>
             <td>
                 <div style="display:flex;gap:.35rem;flex-wrap:wrap">
                     <a href="/modules/equipment/form.php?id=<?= $eq['id'] ?>"

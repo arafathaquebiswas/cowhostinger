@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
-requireRole(['admin', 'reception']);
+requireRole(['admin', 'manager']);
 requireFarmScope();
 requireModule('workers');
 
@@ -71,7 +71,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <p class="text-sm text-muted">Worker Profile</p>
     </div>
     <div style="display:flex;gap:.5rem">
-        <?php if (hasRole(['admin'])): ?>
+        <?php if (hasRole(['admin', 'manager'])): ?>
         <a href="/modules/workers/tasks.php#assign" class="btn btn-secondary">Assign Task</a>
         <a href="/modules/workers/form.php?id=<?= $worker['worker_id'] ?>" class="btn btn-secondary">Edit Profile</a>
         <?php endif; ?>
@@ -228,7 +228,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <div style="display:flex;gap:.4rem">
                     <a href="/modules/workers/my_tasks.php?worker_id=<?= $worker['worker_id'] ?>"
                        class="btn btn-sm btn-secondary">All Tasks</a>
-                    <?php if (hasRole(['admin'])): ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?>
                     <a href="/modules/workers/tasks.php#assign" class="btn btn-sm btn-primary">Assign Task</a>
                     <?php endif; ?>
                 </div>
@@ -240,7 +240,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
                 </svg>
                 <h3>No tasks assigned</h3>
-                <?php if (hasRole(['admin'])): ?>
+                <?php if (hasRole(['admin', 'manager'])): ?>
                 <a href="/modules/workers/tasks.php#assign" class="btn btn-primary btn-sm" style="margin-top:.5rem">Assign First Task</a>
                 <?php endif; ?>
             </div>
@@ -253,7 +253,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         <th>Assigned Date</th>
                         <th>Status</th>
                         <th>Completed</th>
-                        <?php if (hasRole(['admin'])): ?>
+                        <?php if (hasRole(['admin', 'manager'])): ?>
                         <th style="width:80px">Actions</th>
                         <?php endif; ?>
                     </tr>
@@ -274,7 +274,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         </span>
                     </td>
                     <td style="font-size:.82rem"><?= $t['completed_at'] ? e(formatDate($t['completed_at'])) : '—' ?></td>
-                    <?php if (hasRole(['admin'])): ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?>
                     <td>
                         <a href="/modules/workers/edit_task.php?id=<?= $t['id'] ?>&back=<?= urlencode('/modules/workers/view.php?id=' . $worker['worker_id']) ?>"
                            class="btn btn-sm btn-secondary" title="Edit task">

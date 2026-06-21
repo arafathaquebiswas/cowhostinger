@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
-requireRole(['admin', 'worker', 'veterinarian']);
+requireRole(['admin', 'manager', 'worker', 'veterinarian']);
 requireFarmScope();
 requireModule('milk');
 

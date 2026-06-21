@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
-requireRole(['admin', 'accountant']);
+requireRole(['admin', 'manager', 'accountant']);
 requireFarmScope();
 requireNotBlocked();
 
@@ -192,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── Delete buyer ──────────────────────────────────────────────────────────
-    if ($action === 'delete_buyer' && hasRole(['admin'])) {
+    if ($action === 'delete_buyer' && hasRole(['admin', 'manager'])) {
         $cs = $db->prepare("SELECT COUNT(*) FROM cow_sales  WHERE buyer_id=? AND farm_id=?"); $cs->execute([$buyer_id, fid()]);
         $ms = $db->prepare("SELECT COUNT(*) FROM meat_sales WHERE buyer_id=? AND farm_id=?"); $ms->execute([$buyer_id, fid()]);
         if ($cs->fetchColumn() + $ms->fetchColumn() > 0) {
@@ -455,7 +455,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                             </td>
                             <td style="white-space:nowrap">
                                 <a href="/modules/sales/buyers.php?edit=<?= $b['id'] ?>" class="btn btn-secondary btn-sm">Edit</a>
-                                <?php if ($txn_count === 0 && hasRole(['admin'])): ?>
+                                <?php if ($txn_count === 0 && hasRole(['admin', 'manager'])): ?>
                                 <form method="POST" style="display:inline"
                                       onsubmit="return confirm('Delete buyer <?= e(addslashes($b['name'] ?? '#'.$b['id'])) ?>?')">
                                     <?= csrfField() ?>

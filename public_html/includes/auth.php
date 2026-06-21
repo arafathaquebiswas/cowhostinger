@@ -222,7 +222,7 @@ function getRoleRedirect(string $role): string {
         'worker'        => '/modules/workers/my_tasks.php',
         'accountant'    => '/modules/finance/index.php',
         'veterinarian'  => '/modules/cows/index.php',
-        'reception'     => '/modules/cows/index.php',
+        'manager'       => '/dashboard.php',
         'user'          => '/user_dashboard.php',
         default         => '/index.php',
     };

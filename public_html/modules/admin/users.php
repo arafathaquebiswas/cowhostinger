@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = $_POST['password'] ?? '';
         $confirm  = $_POST['confirm']  ?? '';
 
-        $allowed_roles    = ['admin','worker','accountant','veterinarian','reception'];
+        $allowed_roles    = ['admin','manager','worker','accountant','veterinarian'];
         $allowed_statuses = ['active','inactive'];
 
         if ($name === '')                                    $errors[] = 'Name is required.';
@@ -160,11 +160,11 @@ $list_stmt->execute($list_params);
 $users = $list_stmt->fetchAll();
 
 $role_labels = [
-    'admin'        => 'Admin',
-    'worker'       => 'Worker',
+    'admin'        => 'Farm Admin',
+    'manager'      => 'Manager',
     'accountant'   => 'Accountant',
     'veterinarian' => 'Veterinarian',
-    'reception'    => 'Reception',
+    'worker'       => 'Worker',
 ];
 
 $show_form = !empty($errors) || !empty($_GET['add']) || !empty($_GET['edit']);

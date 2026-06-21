@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id = (int)$_SESSION['user_id'];
 
     // ── Adjust feed stock ──────────────────────────────────────────
-    if ($action === 'adjust_feed' && hasRole(['admin', 'worker'])) {
+    if ($action === 'adjust_feed' && hasRole(['admin', 'manager', 'worker'])) {
         $item_id = (int)($_POST['item_id'] ?? 0);
         $delta   = (float)($_POST['qty_delta'] ?? 0);
 
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── Adjust medicine stock ──────────────────────────────────────
-    if ($action === 'adjust_medicine' && hasRole(['admin', 'veterinarian'])) {
+    if ($action === 'adjust_medicine' && hasRole(['admin', 'manager', 'veterinarian'])) {
         $item_id = (int)($_POST['item_id'] ?? 0);
         $delta   = (float)($_POST['qty_delta'] ?? 0);
 
@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── Delete feed item ───────────────────────────────────────────
-    if ($action === 'delete_feed' && hasRole(['admin'])) {
+    if ($action === 'delete_feed' && hasRole(['admin', 'manager'])) {
         $item_id = (int)($_POST['item_id'] ?? 0);
         if ($item_id > 0) {
             $sel = $db->prepare("SELECT id, item_name FROM feed_inventory WHERE id = ? AND " . farmFilter());
@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ── Delete medicine item ───────────────────────────────────────
-    if ($action === 'delete_medicine' && hasRole(['admin'])) {
+    if ($action === 'delete_medicine' && hasRole(['admin', 'manager'])) {
         $item_id = (int)($_POST['item_id'] ?? 0);
         if ($item_id > 0) {
             $sel = $db->prepare("SELECT id, item_name FROM medicine_inventory WHERE id = ? AND " . farmFilter());
@@ -179,7 +179,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <?php if (hasRole(['admin','veterinarian'])): ?>
         <a href="/modules/feed_medicine/treatment_form.php" class="btn btn-secondary btn-sm">+ Treatment</a>
         <?php endif; ?>
-        <?php if (hasRole(['admin'])): ?>
+        <?php if (hasRole(['admin', 'manager'])): ?>
         <a href="/modules/feed_medicine/feed_form.php" class="btn btn-secondary btn-sm">+ Add Feed</a>
         <a href="/modules/feed_medicine/medicine_form.php" class="btn btn-primary btn-sm">+ Add Medicine</a>
         <?php endif; ?>
@@ -241,7 +241,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div class="empty-state">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 11h18M3 6h18M3 16h18"/></svg>
             <h3>No feed items</h3>
-            <p><?= hasRole(['admin']) ? '<a href="/modules/feed_medicine/feed_form.php">Add the first feed item</a>' : 'No feed inventory records yet.' ?></p>
+            <p><?= hasRole(['admin', 'manager']) ? '<a href="/modules/feed_medicine/feed_form.php">Add the first feed item</a>' : 'No feed inventory records yet.' ?></p>
         </div>
         <?php else: ?>
         <div style="overflow-x:auto">
@@ -255,7 +255,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <th>Threshold</th>
                     <th>Last Updated</th>
                     <?php if (hasRole(['admin','worker'])): ?><th style="min-width:200px">Adjust Stock</th><?php endif; ?>
-                    <?php if (hasRole(['admin'])): ?><th style="width:90px">Actions</th><?php endif; ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?><th style="width:90px">Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -284,7 +284,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     </form>
                 </td>
                 <?php endif; ?>
-                <?php if (hasRole(['admin'])): ?>
+                <?php if (hasRole(['admin', 'manager'])): ?>
                 <td>
                     <div style="display:flex;gap:.35rem">
                         <a href="/modules/feed_medicine/feed_form.php?id=<?= $item['id'] ?>"
@@ -317,7 +317,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div class="empty-state">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7z"/></svg>
             <h3>No medicine items</h3>
-            <p><?= hasRole(['admin']) ? '<a href="/modules/feed_medicine/medicine_form.php">Add the first medicine</a>' : 'No medicine inventory records yet.' ?></p>
+            <p><?= hasRole(['admin', 'manager']) ? '<a href="/modules/feed_medicine/medicine_form.php">Add the first medicine</a>' : 'No medicine inventory records yet.' ?></p>
         </div>
         <?php else: ?>
         <div style="overflow-x:auto">
@@ -330,7 +330,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <th>Threshold</th>
                     <th>Last Updated</th>
                     <?php if (hasRole(['admin','veterinarian'])): ?><th style="min-width:200px">Adjust Stock</th><?php endif; ?>
-                    <?php if (hasRole(['admin'])): ?><th style="width:90px">Actions</th><?php endif; ?>
+                    <?php if (hasRole(['admin', 'manager'])): ?><th style="width:90px">Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -374,7 +374,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     </form>
                 </td>
                 <?php endif; ?>
-                <?php if (hasRole(['admin'])): ?>
+                <?php if (hasRole(['admin', 'manager'])): ?>
                 <td>
                     <div style="display:flex;gap:.35rem">
                         <a href="/modules/feed_medicine/medicine_form.php?id=<?= $item['id'] ?>"

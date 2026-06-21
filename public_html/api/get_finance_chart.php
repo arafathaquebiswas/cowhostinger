@@ -2,7 +2,7 @@
 require_once dirname(__DIR__) . '/includes/role_guard.php';
 require_once dirname(__DIR__) . '/includes/farm_guard.php';
 startSecureSession();
-requireRole(['admin', 'accountant']);
+requireRole(['admin', 'manager', 'accountant']);
 
 $db  = getDB();
 $raw = [];

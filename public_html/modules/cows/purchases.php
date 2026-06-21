@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
-requireRole(['admin', 'accountant']);
+requireRole(['admin', 'manager', 'accountant']);
 requireFarmScope();
 requireNotBlocked();
 
@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($action === 'delete_purchase' && hasRole(['admin'])) {
+    if ($action === 'delete_purchase' && hasRole(['admin', 'manager'])) {
         $pid = (int)($_POST['purchase_id'] ?? 0);
         if ($pid > 0) {
             $db->prepare("DELETE FROM cow_purchases WHERE id=? AND farm_id=?")->execute([$pid, fid()]);
@@ -261,7 +261,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                             } ?>"><?= e($p['cow_status']) ?></span>
                         </td>
                         <td>
-                            <?php if (hasRole(['admin'])): ?>
+                            <?php if (hasRole(['admin', 'manager'])): ?>
                             <form method="POST" onsubmit="return confirm('Delete this purchase record?')">
                                 <?= csrfField() ?>
                                 <input type="hidden" name="action"      value="delete_purchase">

@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__, 2) . '/includes/role_guard.php';
 require_once dirname(__DIR__, 2) . '/includes/farm_guard.php';
-requireRole(['admin', 'veterinarian']);
+requireRole(['admin', 'manager', 'veterinarian']);
 requireFarmScope();
 requireNotBlocked();
 
@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($action === 'delete_death' && hasRole(['admin'])) {
+    if ($action === 'delete_death' && hasRole(['admin', 'manager'])) {
         $dr_id = (int)($_POST['dr_id'] ?? 0);
         if ($dr_id > 0) {
             $dr = $db->prepare("SELECT cow_id FROM cow_death_records WHERE id=? AND farm_id=?");
@@ -286,7 +286,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                             title="<?= e($d['vet_notes'] ?? '') ?>"><?= e(mb_strimwidth($d['vet_notes'] ?? '—', 0, 60, '…')) ?></td>
                         <td style="font-size:.78rem"><?= e($d['recorder'] ?? '—') ?></td>
                         <td>
-                            <?php if (hasRole(['admin'])): ?>
+                            <?php if (hasRole(['admin', 'manager'])): ?>
                             <form method="POST" onsubmit="return confirm('Restore this cow to active and delete the death record?')">
                                 <?= csrfField() ?>
                                 <input type="hidden" name="action" value="delete_death">
