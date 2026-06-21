@@ -23,9 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $form = ['name'=>$name,'phone'=>$phone,'email'=>$email,'farm_name'=>$farm_name,'location'=>$location];
 
+        // Auto-generate farm name if not provided
+        if ($farm_name === '') $farm_name = $name . "'s Farm";
+
         // Validation
         if ($name === '')         $errors[] = 'Full name is required.';
-        if ($farm_name === '')    $errors[] = 'Farm name is required.';
         if ($phone === '' && $email === '') $errors[] = 'At least one of phone or email is required.';
         if ($phone !== '' && !preg_match('/^[0-9\+\-\s()]{7,20}$/', $phone)) $errors[] = 'Enter a valid phone number.';
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Enter a valid email address.';
@@ -165,15 +167,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?= csrfField() ?>
 
             <!-- Farm details -->
-            <div class="divider">Your Farm</div>
+            <div class="divider">Your Farm <span style="font-weight:400;font-size:.78rem">(optional)</span></div>
             <div class="form-group">
-                <label class="form-label">Farm Name <span style="color:var(--danger)">*</span></label>
+                <label class="form-label">Farm Name <span style="color:var(--text-muted);font-size:.78rem;font-weight:400">(optional)</span></label>
                 <input type="text" name="farm_name" class="form-control"
-                       value="<?= e($form['farm_name']) ?>" placeholder="e.g. Green Valley Dairy Farm"
-                       maxlength="200" required>
+                       value="<?= e($form['farm_name']) ?>" placeholder="e.g. Green Valley Dairy Farm — leave blank to auto-fill"
+                       maxlength="200">
             </div>
             <div class="form-group">
-                <label class="form-label">Farm Location</label>
+                <label class="form-label">Farm Location <span style="color:var(--text-muted);font-size:.78rem;font-weight:400">(optional)</span></label>
                 <input type="text" name="location" class="form-control"
                        value="<?= e($form['location']) ?>" placeholder="e.g. Dhaka, Bangladesh" maxlength="300">
             </div>
