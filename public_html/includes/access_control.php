@@ -71,6 +71,24 @@ function canAccess(string $feature): bool {
 }
 
 /**
+ * Block-state gate — redirects any suspended or expired farm before write operations.
+ *
+ * Call this immediately after requireFarmScope() on any page that writes data.
+ * CEO and support_staff are exempt (they bypass subscription state entirely).
+ * Grace-period farms are NOT blocked — they retain write access until grace expires.
+ */
+function requireNotBlocked(): void {
+    if (isSuperAdmin() || isSupportStaff()) return;
+    $sub = getSubscription();
+    if (!$sub['is_blocked']) return;
+    $msg = $sub['is_suspended']
+        ? 'Your account has been suspended. Contact AB IT support to restore access.'
+        : 'Your subscription has expired. Please renew to continue.';
+    flashMessage('error', $msg);
+    redirect('/modules/subscription/index.php');
+}
+
+/**
  * Enforce access — redirect with flash message if denied.
  * Use at the top of any page/action that requires a feature.
  *

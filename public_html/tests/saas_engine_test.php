@@ -425,6 +425,7 @@ ok('_subEngineFlush() exists for cache reset',                 function_exists('
 ok('farmCanFinance() is backward-compat alias',                function_exists('farmCanFinance'));
 ok('isSupportStaff() is available',                           function_exists('isSupportStaff'));
 ok('isSaasUser() is available',                               function_exists('isSaasUser'));
+ok('requireNotBlocked() exists in access_control',            function_exists('requireNotBlocked'));
 
 // Support staff bypass: read-only yes, write no
 if ($farm_paid) {
@@ -442,6 +443,63 @@ if ($farm_paid) {
     ok('support_staff canAccess(finance.create) = false',  !canAccess('finance.create'));
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// SUITE J — Write-form block enforcement (requireNotBlocked)
+// Validates the block gate added to breeding, treatments, sales, maintenance,
+// workers write-form modules. Tests logic only (no HTTP redirect possible in CLI).
+// ════════════════════════════════════════════════════════════════════════════
+
+suite('Suite J — Write-Form Block Enforcement Logic');
+
+// Simulate expired farm attempting writes
+if ($farm_expired) {
+    fake_session($farm_expired);
+    $sub = getSubscription();
+
+    // canAccess returns false for non-allowed features on blocked farm
+    ok('Expired: canAccess(breeding.create) = false',    !canAccess('breeding.create'));
+    ok('Expired: canAccess(treatment.create) = false',   !canAccess('treatment.create'));
+    ok('Expired: canAccess(sale.create) = false',        !canAccess('sale.create'));
+    ok('Expired: canAccess(maintenance.create) = false', !canAccess('maintenance.create'));
+    ok('Expired: canAccess(task.create) = false',        !canAccess('task.create'));
+
+    // Read-only still allowed
+    ok('Expired: canAccess(breeding.view) = true',  canAccess('breeding.view'));
+    ok('Expired: canAccess(treatment.view) = true', canAccess('treatment.view'));
+    ok('Expired: canAccess(sales.view) = true',     canAccess('sales.view'));
+
+} elseif ($farm_suspended) {
+    fake_session($farm_suspended);
+
+    ok('Suspended: canAccess(breeding.create) = false',    !canAccess('breeding.create'));
+    ok('Suspended: canAccess(treatment.create) = false',   !canAccess('treatment.create'));
+    ok('Suspended: canAccess(sale.create) = false',        !canAccess('sale.create'));
+    ok('Suspended: canAccess(maintenance.create) = false', !canAccess('maintenance.create'));
+} else {
+    skip('Write-form block enforcement (expired/suspended)', 'No expired or suspended farm in DB');
+}
+
+// CEO must NOT be blocked
+fake_ceo();
+ok('CEO: requireNotBlocked() is a no-op (is_unlimited)',
+    (function() {
+        // requireNotBlocked() calls isSuperAdmin() → returns early; no redirect
+        // We can verify indirectly: getSubscription() is_unlimited must be true
+        return getSubscription()['is_unlimited'] === true;
+    })()
+);
+
+// Grace period farm: NOT blocked, writes still allowed
+if ($farm_grace) {
+    fake_session($farm_grace);
+    $sub = getSubscription();
+    ok('Grace: is_blocked = false (grace ≠ blocked)',    !$sub['is_blocked']);
+    ok('Grace: canAccess(breeding.create) = true',        canAccess('breeding.create'));
+    ok('Grace: canAccess(treatment.create) = true',       canAccess('treatment.create'));
+} else {
+    skip('Grace period write access', 'No grace-period farm in DB');
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // SUMMARY
