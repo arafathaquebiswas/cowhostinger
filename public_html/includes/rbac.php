@@ -21,7 +21,8 @@ define('ROLE_ADMIN',     'admin');          // Farm — owner/highest authority
 define('ROLE_MANAGER',   'manager');        // Farm — full ops, no billing/users
 define('ROLE_ACCOUNTANT','accountant');     // Farm — finance & reports
 define('ROLE_VET',       'veterinarian');  // Farm — animal health
-define('ROLE_WORKER',    'worker');         // Farm — task execution
+define('ROLE_MILKMAN',   'milkman');        // Farm — dairy handler / milk recording
+define('ROLE_WORKER',    'worker');         // Farm — general task execution
 
 // ── Permission matrix ─────────────────────────────────────────────────────────
 // CEO always bypasses this — isSuperAdmin() short-circuits everything.
@@ -87,7 +88,16 @@ define('RBAC_PERMISSIONS', [
         'dashboard.view', 'profile.*',
     ],
 
-    // ── Farm: Worker — task execution only ───────────────────────────────────
+    // ── Farm: Milkman — dairy handler, milk recording ────────────────────────
+    ROLE_MILKMAN => [
+        'milk.create', 'milk.view', 'milk.list', 'milk.edit',
+        'cow.view', 'cow.list',
+        'feed.view', 'feed.log',
+        'alert.view',
+        'dashboard.view', 'profile.*',
+    ],
+
+    // ── Farm: Worker — general task execution ────────────────────────────────
     ROLE_WORKER => [
         'task.view_assigned', 'task.update',
         'cow.view',

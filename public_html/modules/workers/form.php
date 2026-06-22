@@ -81,14 +81,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($salary === null || $salary < 0) $errors[] = 'Salary must be 0 or greater.';
     if ($salary > 9999999)               $errors[] = 'Salary value is too large.';
 
-    if ($form['hire_date'] === '')         $errors[] = 'Hire date is required.';
-    elseif (!strtotime($form['hire_date'])) $errors[] = 'Invalid hire date.';
+    $validDate = static function (string $d): bool {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) return false;
+        [$y, $m, $day] = explode('-', $d);
+        return checkdate((int)$m, (int)$day, (int)$y);
+    };
 
-    if ($form['termination_date'] !== '' && !strtotime($form['termination_date'])) {
-        $errors[] = 'Invalid termination date.';
+    if ($form['hire_date'] === '')            $errors[] = 'Hire date is required.';
+    elseif (!$validDate($form['hire_date']))  $errors[] = 'Invalid hire date (use YYYY-MM-DD).';
+
+    if ($form['termination_date'] !== '' && !$validDate($form['termination_date'])) {
+        $errors[] = 'Invalid termination date (use YYYY-MM-DD).';
     }
     if ($form['termination_date'] !== '' && $form['hire_date'] !== '' &&
-        strtotime($form['termination_date']) < strtotime($form['hire_date'])) {
+        $form['termination_date'] < $form['hire_date']) {
         $errors[] = 'Termination date cannot be before hire date.';
     }
 

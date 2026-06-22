@@ -96,6 +96,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'payme
         }
     }
 
+    // Global flood guard — cap total pending requests per farm across all plans
+    if (empty($errors)) {
+        $count_stmt = $db->prepare("SELECT COUNT(*) FROM payments WHERE farm_id=? AND status='pending'");
+        $count_stmt->execute([$fid]);
+        if ((int)$count_stmt->fetchColumn() >= 3) {
+            $errors[] = 'You have too many pending payment requests. Please wait for existing requests to be reviewed.';
+        }
+    }
+
     if (!empty($errors)) {
         flashMessage('error', implode(' ', $errors));
         redirect('/modules/subscription/index.php#request-form');

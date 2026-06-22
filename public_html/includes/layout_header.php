@@ -46,6 +46,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= generateCsrfToken() ?>">
     <title><?= e($page_title ?? 'Page') ?> — <?= e(APP_NAME) ?></title>
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -371,7 +372,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  🥛  MILK
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_module_enabled('milk') && $_can(['admin','manager','worker','veterinarian','accountant'])): ?>
+            <?php if ($_module_enabled('milk') && $_can(['admin','manager','milkman','worker','veterinarian','accountant'])): ?>
             <div class="nav-acc<?= $_acc(['milk','milk_analytics','milk_pricing']) ?>" id="nacc-milk">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-milk')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8l2 6H6L8 2z"/><path d="M6 8v12a2 2 0 002 2h8a2 2 0 002-2V8"/></svg>
@@ -379,7 +380,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <span class="nav-acc-chv">›</span>
                 </button>
                 <div class="nav-acc-body">
-                    <?php if ($_can(['admin','manager','worker','veterinarian'])): ?>
+                    <?php if ($_can(['admin','manager','milkman','worker','veterinarian'])): ?>
                     <a href="/modules/milk/record.php" class="nav-item">Add Milk Entry</a>
                     <a href="/modules/milk/index.php" class="nav-item<?= $_nav_active('milk') ?>">Milk Records</a>
                     <?php endif; ?>
@@ -394,7 +395,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  🌾  FEED
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_module_enabled('feed_medicine') && $_can(['admin','manager','worker','veterinarian','accountant'])): ?>
+            <?php if ($_module_enabled('feed_medicine') && $_can(['admin','manager','milkman','worker','veterinarian','accountant'])): ?>
             <div class="nav-acc<?= $_acc(['feed_medicine']) ?>" id="nacc-feed">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-feed')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
@@ -411,7 +412,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  💉  HEALTH
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_can(['admin','manager','veterinarian','worker'])): ?>
+            <?php if ($_can(['admin','manager','milkman','veterinarian','worker'])): ?>
             <div class="nav-acc<?= $_acc(['diagnosis','treatments','veterinarians']) ?>" id="nacc-health">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-health')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -419,7 +420,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <span class="nav-acc-chv">›</span>
                 </button>
                 <div class="nav-acc-body">
-                    <?php if ($_module_enabled('cows') && $_can(['admin','manager','veterinarian','worker'])): ?>
+                    <?php if ($_module_enabled('cows') && $_can(['admin','manager','milkman','veterinarian','worker'])): ?>
                     <a href="/modules/treatments/index.php" class="nav-item<?= $_nav_active('treatments') ?>">Treatments</a>
                     <?php endif; ?>
                     <?php if ($_module_enabled('diagnosis') && $_can(['admin','manager','veterinarian'])): ?>
@@ -652,10 +653,10 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 <a href="/modules/support/index.php" class="qaf-item" data-qaf-id="support_tickets"><span class="qaf-chk">✓</span><span class="qaf-ico">🎫</span> Open Tickets</a>
                 <a href="/modules/super_admin/index.php" class="qaf-item" data-qaf-id="support_farms"><span class="qaf-chk">✓</span><span class="qaf-ico">🏘</span> Farm List</a>
                 <?php endif; ?>
-                <?php if ($_can(['admin','worker','veterinarian','manager']) && $_module_enabled('milk')): ?>
+                <?php if ($_can(['admin','milkman','worker','veterinarian','manager']) && $_module_enabled('milk')): ?>
                 <a href="/modules/milk/record.php" class="qaf-item" data-qaf-id="milk"><span class="qaf-chk">✓</span><span class="qaf-ico">🥛</span> Add Milk</a>
                 <?php endif; ?>
-                <?php if ($_can(['admin','worker','accountant','manager']) && $_module_enabled('feed_medicine')): ?>
+                <?php if ($_can(['admin','milkman','worker','accountant','manager']) && $_module_enabled('feed_medicine')): ?>
                 <a href="/modules/feed_medicine/feed_log.php" class="qaf-item" data-qaf-id="feed"><span class="qaf-chk">✓</span><span class="qaf-ico">🌾</span> Add Feed</a>
                 <?php endif; ?>
                 <?php if ($_can(['admin','manager','veterinarian','worker'])): ?>
@@ -725,7 +726,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
         </a>
         <?php endif; ?>
 
-        <?php if ($_can(['admin','manager','worker','veterinarian']) && $_module_enabled('milk')): ?>
+        <?php if ($_can(['admin','manager','milkman','worker','veterinarian']) && $_module_enabled('milk')): ?>
         <a href="/modules/milk/index.php" class="bottom-nav-item" data-page="milk,milk_analytics">
             <span class="bn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8l2 6H6L8 2z"/><path d="M6 8v12a2 2 0 002 2h8a2 2 0 002-2V8"/><line x1="10" y1="14" x2="14" y2="14"/></svg>

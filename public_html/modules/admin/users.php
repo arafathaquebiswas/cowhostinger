@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = $_POST['password'] ?? '';
         $confirm  = $_POST['confirm']  ?? '';
 
-        $allowed_roles    = ['admin','manager','worker','accountant','veterinarian'];
+        $allowed_roles    = ['admin','manager','accountant','veterinarian','milkman','worker'];
         $allowed_statuses = ['active','inactive'];
 
         if ($name === '')                                    $errors[] = 'Name is required.';
@@ -81,17 +81,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'add') {
             if ($password === '')              $errors[] = 'Password is required.';
-            elseif (strlen($password) < 8)    $errors[] = 'Password must be at least 8 characters.';
+            elseif (strlen($password) < 10)   $errors[] = 'Password must be at least 10 characters.';
             elseif ($password !== $confirm)   $errors[] = 'Passwords do not match.';
         } elseif ($password !== '') {
-            if (strlen($password) < 8)        $errors[] = 'New password must be at least 8 characters.';
+            if (strlen($password) < 10)       $errors[] = 'New password must be at least 10 characters.';
             elseif ($password !== $confirm)   $errors[] = 'Passwords do not match.';
         }
 
-        // Check email uniqueness
+        // Check email uniqueness within this farm
         if (empty($errors)) {
-            $chk = $db->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
-            $chk->execute([$email, $action === 'edit' ? $user_id : 0]);
+            $chk = $db->prepare("SELECT id FROM users WHERE email = ? AND farm_id = ? AND id != ?");
+            $chk->execute([$email, fid(), $action === 'edit' ? $user_id : 0]);
             if ($chk->fetch()) $errors[] = 'That email address is already in use.';
         }
 
@@ -164,6 +164,7 @@ $role_labels = [
     'manager'      => 'Manager',
     'accountant'   => 'Accountant',
     'veterinarian' => 'Veterinarian',
+    'milkman'      => 'Milkman / Dairy Handler',
     'worker'       => 'Worker',
 ];
 
@@ -249,7 +250,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     </label>
                     <div class="input-group">
                         <input type="password" id="u_password" name="password" class="form-control"
-                               placeholder="<?= ($edit_user && $edit_user['id']) ? 'Leave blank to keep current' : 'Minimum 8 characters' ?>"
+                               placeholder="<?= ($edit_user && $edit_user['id']) ? 'Leave blank to keep current' : 'Minimum 10 characters' ?>"
                                <?= ($edit_user && $edit_user['id']) ? '' : 'required' ?>>
                         <button type="button" class="input-group-btn toggle-pwd-btn" data-target="u_password" aria-label="Toggle">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -419,7 +420,7 @@ if (pwdInput) {
     pwdInput.addEventListener('input', function() {
         var val = this.value;
         var score = 0;
-        if (val.length >= 8)                     score++;
+        if (val.length >= 10)                    score++;
         if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score++;
         if (/[0-9]/.test(val) || /[^A-Za-z0-9]/.test(val)) score++;
 
@@ -459,8 +460,8 @@ if (userForm) {
         if (!name)  { ok = false; }
         if (!email) { ok = false; }
         if (!role)  { ok = false; }
-        if (!isEdit && !pwd)      { ok = false; }
-        if (!isEdit && pwd.length < 8)  { ok = false; }
+        if (!isEdit && !pwd)       { ok = false; }
+        if (!isEdit && pwd.length < 10) { ok = false; }
         if (pwd && pwd !== conf) { ok = false; }
 
         if (!ok) { e.preventDefault(); }

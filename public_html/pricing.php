@@ -3,7 +3,8 @@
  * pricing.php — Public-facing pricing page.
  * No auth required. Loads plans from DB.
  */
-require_once __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/auth.php';
+startSecureSession();
 
 $logged_in    = isset($_SESSION['user_id']) && isset($_SESSION['farm_id']);
 $current_plan = '';

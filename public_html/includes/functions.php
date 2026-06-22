@@ -59,18 +59,20 @@ function auditLog(
 // ── MODULE SETTINGS ───────────────────────────────────────────────────────────
 
 function isModuleEnabled(string $moduleName): bool {
-    static $cache = null;
-    if ($cache === null) {
+    static $cache = [];
+    $farm_id = fid();
+    if (!isset($cache[$farm_id])) {
         try {
-            $db    = getDB();
-            $rows  = $db->query('SELECT module_name, is_enabled FROM module_settings')->fetchAll(PDO::FETCH_KEY_PAIR);
-            $cache = $rows ?: [];
+            $db   = getDB();
+            $stmt = $db->prepare('SELECT module_name, is_enabled FROM module_settings WHERE farm_id = ?');
+            $stmt->execute([$farm_id]);
+            $cache[$farm_id] = $stmt->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
         } catch (Exception $e) {
             return true;
         }
     }
     // Unknown modules default to enabled (safe for new modules not yet in DB)
-    return isset($cache[$moduleName]) ? (bool)$cache[$moduleName] : true;
+    return isset($cache[$farm_id][$moduleName]) ? (bool)$cache[$farm_id][$moduleName] : true;
 }
 
 // ── FLASH MESSAGES ────────────────────────────────────────────────────────────

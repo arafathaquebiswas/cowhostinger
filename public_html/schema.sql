@@ -333,12 +333,13 @@ CREATE TABLE IF NOT EXISTS `alerts` (
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `module_settings` (
   `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `farm_id`     INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 = global seed default; >0 = per-farm row',
   `module_name` VARCHAR(100) NOT NULL,
   `is_enabled`  TINYINT(1)   NOT NULL DEFAULT 1,
   `updated_by`  INT UNSIGNED DEFAULT NULL,
   `updated_at`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_module_name` (`module_name`),
+  UNIQUE KEY `uk_farm_module` (`farm_id`, `module_name`),
   CONSTRAINT `fk_ms_user` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -8,6 +8,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['error' => 'Method not allowed'], 405);
 }
 
+// CSRF check for this JSON API endpoint (token sent as request header)
+$_csrf_header = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+if (!verifyCsrfToken($_csrf_header)) {
+    jsonResponse(['error' => 'Invalid CSRF token'], 403);
+}
+
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $id    = isset($input['id'])  ? (int)$input['id'] : null;
 $all   = !empty($input['all']);

@@ -6,28 +6,6 @@ requireRole(['superadmin']);
 $db  = getDB();
 $uid = (int)$_SESSION['user_id'];
 
-// ── Auto-migrate: add offer + featured columns if missing ─────────────────────
-(function(PDO $db) {
-    $existing = array_column($db->query("SHOW COLUMNS FROM plans")->fetchAll(PDO::FETCH_ASSOC), 'Field');
-    $needed = [
-        "offer_price"  => "ALTER TABLE plans ADD COLUMN offer_price  DECIMAL(10,2) DEFAULT NULL AFTER price_monthly",
-        "offer_active" => "ALTER TABLE plans ADD COLUMN offer_active TINYINT(1) NOT NULL DEFAULT 0 AFTER offer_price",
-        "offer_label"  => "ALTER TABLE plans ADD COLUMN offer_label  VARCHAR(100) DEFAULT NULL AFTER offer_active",
-        "offer_end"    => "ALTER TABLE plans ADD COLUMN offer_end    DATE DEFAULT NULL AFTER offer_label",
-        "is_featured"  => "ALTER TABLE plans ADD COLUMN is_featured  TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
-        "can_payroll"  => "ALTER TABLE plans ADD COLUMN can_payroll  TINYINT(1) NOT NULL DEFAULT 0 AFTER can_milk_analytics",
-    ];
-    foreach ($needed as $col => $sql) {
-        if (!in_array($col, $existing)) {
-            try { $db->exec($sql); } catch (Throwable $e) { error_log("[plans migration] $col: " . $e->getMessage()); }
-        }
-    }
-    // Default: Pro plan is featured
-    if (!in_array('is_featured', $existing)) {
-        try { $db->exec("UPDATE plans SET is_featured=1 WHERE name='Pro'"); } catch (Throwable $e) {}
-    }
-})($db);
-
 // ── POST handlers ─────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {

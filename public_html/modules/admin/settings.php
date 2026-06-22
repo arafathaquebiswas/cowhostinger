@@ -9,6 +9,25 @@ $active_nav = 'admin_settings';
 
 $db = getDB();
 
+// ── Auto-migrate: add farm_id column to module_settings if missing ────────────
+(function(PDO $db) {
+    $cols = array_column($db->query("SHOW COLUMNS FROM module_settings")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    if (!in_array('farm_id', $cols)) {
+        try {
+            $db->exec("ALTER TABLE module_settings ADD COLUMN farm_id INT UNSIGNED NOT NULL DEFAULT 0 AFTER id");
+            try { $db->exec("ALTER TABLE module_settings DROP INDEX uk_module_name"); } catch (Throwable $e) {}
+            try { $db->exec("ALTER TABLE module_settings ADD UNIQUE KEY uk_farm_module (farm_id, module_name)"); } catch (Throwable $e) {}
+            // Seed per-farm rows from existing global defaults (farm_id = 0)
+            $db->exec("INSERT IGNORE INTO module_settings (farm_id, module_name, is_enabled)
+                       SELECT f.id, m.module_name, m.is_enabled
+                       FROM farms f
+                       CROSS JOIN (SELECT module_name, is_enabled FROM module_settings WHERE farm_id = 0) m");
+        } catch (Throwable $e) {
+            error_log('[module_settings migration] ' . $e->getMessage());
+        }
+    }
+})($db);
+
 // Logging helper — writes to project-level logs/ directory (outside web root)
 function _settings_log(string $msg): void {
     $log_dir  = dirname(__DIR__, 2) . '/logs';
@@ -45,9 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Enforce locked modules
         if (in_array($mod, LOCKED_MODULES, true)) $enabled = 1;
 
-        // Verify module exists in DB before updating
-        $exists_stmt = $db->prepare("SELECT id FROM module_settings WHERE module_name = ?");
-        $exists_stmt->execute([$mod]);
+        // Verify module exists for this farm before updating
+        $exists_stmt = $db->prepare("SELECT id FROM module_settings WHERE farm_id = ? AND module_name = ?");
+        $exists_stmt->execute([fid(), $mod]);
 
         if (!$exists_stmt->fetch()) {
             _settings_log("AJAX toggle REJECTED — unknown module: {$mod} by user #{$user_id}");
@@ -55,12 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Read current value for logging
-        $before_stmt = $db->prepare("SELECT is_enabled FROM module_settings WHERE module_name=?");
-        $before_stmt->execute([$mod]);
+        $before_stmt = $db->prepare("SELECT is_enabled FROM module_settings WHERE farm_id = ? AND module_name = ?");
+        $before_stmt->execute([fid(), $mod]);
         $before = (int)$before_stmt->fetchColumn();
 
-        $db->prepare("UPDATE module_settings SET is_enabled=?, updated_by=? WHERE module_name=?")
-           ->execute([$enabled, $user_id, $mod]);
+        $db->prepare("UPDATE module_settings SET is_enabled=?, updated_by=? WHERE farm_id = ? AND module_name = ?")
+           ->execute([$enabled, $user_id, fid(), $mod]);
 
         _settings_log("AJAX toggle — module={$mod} before={$before} after={$enabled} user_id={$user_id} ip=" . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
         auditLog($user_id, 'MODULE_TOGGLE', 'module_settings', null,
@@ -79,14 +98,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($lm, $modules, true)) $modules[] = $lm;
     }
 
-    $all_modules = $db->query("SELECT module_name FROM module_settings ORDER BY module_name")->fetchAll(PDO::FETCH_COLUMN);
-    $update      = $db->prepare("UPDATE module_settings SET is_enabled=?, updated_by=? WHERE module_name=?");
+    $all_stmt = $db->prepare("SELECT module_name FROM module_settings WHERE farm_id = ? ORDER BY module_name");
+    $all_stmt->execute([fid()]);
+    $all_modules = $all_stmt->fetchAll(PDO::FETCH_COLUMN);
+    $update      = $db->prepare("UPDATE module_settings SET is_enabled=?, updated_by=? WHERE farm_id = ? AND module_name=?");
 
     $log_parts = [];
     foreach ($all_modules as $mod) {
         $enabled = in_array($mod, $modules, true) ? 1 : 0;
         if (in_array($mod, LOCKED_MODULES, true)) $enabled = 1;
-        $update->execute([$enabled, $user_id, $mod]);
+        $update->execute([$enabled, $user_id, fid(), $mod]);
         auditLog($user_id, 'MODULE_TOGGLE', 'module_settings', null, null, ['module' => $mod, 'enabled' => $enabled]);
         $log_parts[] = "{$mod}={$enabled}";
     }
@@ -113,7 +134,8 @@ $module_info = [
     'alerts'       => ['label' => 'Alerts',            'desc' => 'System-wide alert aggregation — cannot be disabled by convention.'],
 ];
 
-$modules_stmt = $db->query("SELECT module_name, is_enabled, updated_at FROM module_settings ORDER BY module_name");
+$modules_stmt = $db->prepare("SELECT module_name, is_enabled, updated_at FROM module_settings WHERE farm_id = ? ORDER BY module_name");
+$modules_stmt->execute([fid()]);
 $modules_data = [];
 foreach ($modules_stmt->fetchAll() as $row) {
     $modules_data[$row['module_name']] = $row;

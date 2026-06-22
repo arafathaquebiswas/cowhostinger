@@ -84,6 +84,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     "INSERT INTO subscriptions (farm_id, plan_id, start_date, status) VALUES (?,1,CURDATE(),'trial')"
                 )->execute([$farm_id]);
 
+                // Seed per-farm module settings from global defaults (farm_id = 0)
+                $db->prepare(
+                    "INSERT IGNORE INTO module_settings (farm_id, module_name, is_enabled)
+                     SELECT ?, module_name, is_enabled FROM module_settings WHERE farm_id = 0"
+                )->execute([$farm_id]);
+
                 auditLog($user_id, 'REGISTER_FARM', 'farms', $farm_id, null, ['farm_name' => $farm_name]);
 
                 $db->commit();

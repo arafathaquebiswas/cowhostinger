@@ -94,8 +94,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($cow['current_weight'] !== null && ($cow['current_weight'] <= 0 || $cow['current_weight'] > 9999)) {
         $errors[] = 'Weight must be between 0.01 and 9999 kg.';
     }
-    if ($cow['birth_date'] !== '' && strtotime($cow['birth_date']) > time()) {
-        $errors[] = 'Birth date cannot be in the future.';
+    if ($cow['birth_date'] !== '') {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $cow['birth_date'])) {
+            $errors[] = 'Invalid birth date format (use YYYY-MM-DD).';
+        } else {
+            [$_by, $_bm, $_bd] = explode('-', $cow['birth_date']);
+            if (!checkdate((int)$_bm, (int)$_bd, (int)$_by)) {
+                $errors[] = 'Invalid birth date.';
+            } elseif ($cow['birth_date'] > date('Y-m-d')) {
+                $errors[] = 'Birth date cannot be in the future.';
+            }
+        }
     }
 
     // Tag number uniqueness — scoped to this farm

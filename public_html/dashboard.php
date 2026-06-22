@@ -272,6 +272,8 @@ function _usageMeter(string $label, int $current, ?int $max, string $href = '#')
 <script>
 'use strict';
 
+var _csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
 // ── KPI Cards ──────────────────────────────────────────────────
 fetch('/api/get_dashboard_kpis.php')
     .then(r => r.json())
@@ -425,7 +427,7 @@ function loadDashAlerts() {
 function markRead(id) {
     fetch('/api/mark_alert_read.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken },
         body: JSON.stringify({ id: id })
     }).then(function() { loadDashAlerts(); });
 }
@@ -436,7 +438,7 @@ if (markAllBtn) {
         if (!confirm('Mark all alerts as read?')) return;
         fetch('/api/mark_alert_read.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken },
             body: JSON.stringify({ all: true })
         }).then(function() { loadDashAlerts(); });
     });
