@@ -100,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $page_title = 'Record Treatment';
-$active_nav = 'feed_medicine';
+$active_nav = 'treatments';
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 ?>
 

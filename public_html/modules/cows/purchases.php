@@ -6,7 +6,7 @@ requireFarmScope();
 requireNotBlocked();
 
 $page_title = 'Cow Purchases';
-$active_nav = 'cows';
+$active_nav = 'cow_purchases';
 $db  = getDB();
 $uid = (int)$_SESSION['user_id'];
 

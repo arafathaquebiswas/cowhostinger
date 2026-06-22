@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $page_title = $is_edit ? "Edit Feed — {$form['item_name']}" : 'Add Feed Item';
-$active_nav = 'feed_medicine';
+$active_nav = 'feed_form';
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 ?>
 

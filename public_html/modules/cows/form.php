@@ -201,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $page_title = $is_edit ? "Edit Cow #{$cow['tag_number']}" : 'Add New Cow';
-$active_nav = 'cows';
+$active_nav = 'cow_form';
 
 $status_options = [
     'active'         => 'Active',

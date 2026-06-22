@@ -122,7 +122,7 @@ for ($i = 11; $i >= 0; $i--) {
 }
 
 $page_title = 'Financial Summary';
-$active_nav = 'profit_engine';
+$active_nav = 'finance_summary';
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 ?>
 

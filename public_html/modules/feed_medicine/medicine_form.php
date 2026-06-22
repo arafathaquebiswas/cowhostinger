@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $page_title = $is_edit ? "Edit Medicine — {$form['item_name']}" : 'Add Medicine';
-$active_nav = 'feed_medicine';
+$active_nav = 'medicine_purchases';
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 ?>
 

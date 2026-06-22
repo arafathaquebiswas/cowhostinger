@@ -7,7 +7,7 @@ requireModule('feed_medicine');
 requireNotBlocked();
 
 $page_title = 'Feed & Medicine Log';
-$active_nav = 'feed_medicine';
+$active_nav = 'feed_log';
 $db      = getDB();
 $user_id = (int)$_SESSION['user_id'];
 $errors  = [];

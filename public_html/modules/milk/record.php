@@ -6,7 +6,7 @@ requireFarmScope();
 requireModule('milk');
 
 $page_title = 'Record Milk';
-$active_nav = 'milk';
+$active_nav = 'milk_record';
 $db = getDB();
 
 $preselect_cow = (int)($_GET['cow_id'] ?? 0);

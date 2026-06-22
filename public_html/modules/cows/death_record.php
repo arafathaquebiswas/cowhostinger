@@ -6,7 +6,7 @@ requireFarmScope();
 requireNotBlocked();
 
 $page_title = 'Death Records';
-$active_nav = 'cows';
+$active_nav = 'cow_deaths';
 $db  = getDB();
 $uid = (int)$_SESSION['user_id'];
 
@@ -65,6 +65,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $db->beginTransaction();
             try {
+                // Get cow info for loss calculation
+                $cow_info = $db->prepare("SELECT tag_number, purchase_price FROM cows WHERE id=? AND " . farmFilter());
+                $cow_info->execute([$cow_id]);
+                $cow_info = $cow_info->fetch();
+
                 // Insert death record
                 $db->prepare(
                     "INSERT INTO cow_death_records
@@ -82,11 +87,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->prepare("UPDATE cows SET status='deceased' WHERE id=? AND " . farmFilter())
                    ->execute([$cow_id]);
 
+                // Record financial loss in accounting
+                $loss_amount = $loss ?? (float)($cow_info['purchase_price'] ?? 0);
+                if ($loss_amount > 0) {
+                    $cause_label = match($cause) {
+                        'disease'              => 'Disease',
+                        'accident'             => 'Accident',
+                        'old_age'              => 'Old Age',
+                        'calving_complication' => 'Calving Complication',
+                        'other'                => 'Other',
+                        default                => 'Unknown',
+                    };
+                    $fin_note = "Cow #{$cow_info['tag_number']} — {$cause_label}"
+                              . ($disease_name !== '' ? "; {$disease_name}" : '');
+                    $db->prepare(
+                        "INSERT INTO finance_transactions
+                           (farm_id, type, category, amount, related_module, reference_id, transaction_date, recorded_by, notes)
+                         VALUES (?, 'expense', 'Cow Death Loss', ?, 'cows', ?, ?, ?, ?)"
+                    )->execute([fid(), $loss_amount, $dr_id, $death_date, $uid, $fin_note]);
+                }
+
                 $db->commit();
                 auditLog($uid, 'COW_DEATH', 'cow_death_records', $dr_id, null,
-                    ['cow_id' => $cow_id, 'cause' => $cause, 'date' => $death_date]);
+                    ['cow_id' => $cow_id, 'cause' => $cause, 'date' => $death_date, 'loss' => $loss_amount ?? 0]);
 
-                flashMessage('success', 'Death recorded and cow status updated to deceased.');
+                $loss_str = ($loss_amount ?? 0) > 0
+                    ? ' Loss of ৳' . number_format($loss_amount, 2) . ' recorded in accounts.'
+                    : '';
+                flashMessage('success', "Death recorded and cow status updated to deceased.{$loss_str}");
                 redirect('/modules/cows/death_record.php');
             } catch (Throwable $e) {
                 $db->rollBack();
@@ -106,9 +134,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->beginTransaction();
                 $db->prepare("DELETE FROM cow_death_records WHERE id=? AND farm_id=?")->execute([$dr_id, fid()]);
                 $db->prepare("UPDATE cows SET status='active' WHERE id=? AND " . farmFilter())->execute([$dr_row['cow_id']]);
+                // Remove the linked finance_transaction loss entry
+                $db->prepare(
+                    "DELETE FROM finance_transactions WHERE farm_id=? AND related_module='cows' AND reference_id=? AND category='Cow Death Loss'"
+                )->execute([fid(), $dr_id]);
                 $db->commit();
                 auditLog($uid, 'DELETE_DEATH_RECORD', 'cow_death_records', $dr_id);
-                flashMessage('success', 'Death record removed and cow status restored to active.');
+                flashMessage('success', 'Death record removed and cow status restored to active. Loss entry reversed.');
             }
         }
         redirect('/modules/cows/death_record.php');

@@ -7,7 +7,7 @@ requireNotBlocked();
 requireModule('workers');
 
 $page_title = 'Task Management';
-$active_nav = 'workers';
+$active_nav = 'worker_tasks';
 $db = getDB();
 
 // Handle POST actions

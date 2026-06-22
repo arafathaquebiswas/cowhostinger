@@ -96,17 +96,27 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
     .impersonation-banner a{color:#E9D5FF;font-weight:600;text-decoration:underline}
 
     /* ══════════════════════════════════════════════════════════
-       ACCORDION NAV
+       ACCORDION NAV — true single-open accordion with animation
        ══════════════════════════════════════════════════════════ */
     .nav-acc{margin:.05rem 0}
-    .nav-acc-hdr{display:flex;align-items:center;gap:.5rem;width:100%;padding:.42rem .75rem;background:none;border:none;text-align:left;cursor:pointer;color:rgba(255,255,255,.48);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-radius:6px;transition:.15s;line-height:1.4}
+    .nav-acc-hdr{display:flex;align-items:center;gap:.5rem;width:100%;padding:.42rem .75rem;background:none;border:none;text-align:left;cursor:pointer;color:rgba(255,255,255,.48);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-radius:6px;transition:color .15s,background .15s;line-height:1.4}
     .nav-acc-hdr:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.78)}
     .nav-acc.open>.nav-acc-hdr{color:rgba(255,255,255,.85);background:rgba(255,255,255,.05)}
     .nav-acc-hdr svg{flex-shrink:0;opacity:.7}
-    .nav-acc-chv{margin-left:auto;font-size:.65rem;transition:transform .22s;opacity:.6}
+    .nav-acc-chv{margin-left:auto;font-size:.65rem;transition:transform .22s ease;opacity:.6}
     .nav-acc.open>.nav-acc-hdr .nav-acc-chv{transform:rotate(90deg);opacity:1}
-    .nav-acc-body{display:none;padding:.1rem 0 .25rem}
-    .nav-acc.open>.nav-acc-body{display:block}
+    /* Smooth slide animation via max-height */
+    .nav-acc-body{
+        display:block;
+        max-height:0;
+        overflow:hidden;
+        padding:0;
+        transition:max-height .24s ease, padding .18s ease;
+    }
+    .nav-acc.open>.nav-acc-body{
+        max-height:640px;
+        padding:.1rem 0 .3rem;
+    }
     /* sub-items inside accordion */
     .nav-acc-body .nav-item{padding-left:1.9rem;font-size:.83rem}
     /* dashboard pinned link */
@@ -144,30 +154,37 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
     .qaf.customizing .qaf-item.qaf-on .qaf-chk{background:#2D6A4F;border-color:#2D6A4F;color:#fff}
     </style>
     <script>
-    // Accordion toggle with localStorage persistence
+    // Single-open accordion: closes all others before opening the clicked section
     function toggleAcc(id) {
         var el = document.getElementById(id);
         if (!el) return;
         var opening = !el.classList.contains('open');
-        el.classList.toggle('open', opening);
+        // Close every accordion section
+        document.querySelectorAll('.nav-acc').forEach(function(acc) {
+            acc.classList.remove('open');
+        });
+        // Open the target if it was closed
+        if (opening) el.classList.add('open');
+        // Persist: store at most one open id (or empty)
         try {
-            var s = JSON.parse(localStorage.getItem('_farm_nav') || '{}');
-            s[id] = opening;
+            var s = {};
+            if (opening) s[id] = true;
             localStorage.setItem('_farm_nav', JSON.stringify(s));
         } catch(e){}
     }
-    // On load: restore any additionally-opened sections from localStorage
-    // (Active-page section is already open via PHP class)
+    // On load: restore one section from localStorage only if PHP has none already open
     document.addEventListener('DOMContentLoaded', function() {
-        try {
-            var s = JSON.parse(localStorage.getItem('_farm_nav') || '{}');
-            Object.keys(s).forEach(function(id) {
-                if (s[id]) {
-                    var el = document.getElementById(id);
+        var alreadyOpen = document.querySelector('.nav-acc.open');
+        if (!alreadyOpen) {
+            try {
+                var s = JSON.parse(localStorage.getItem('_farm_nav') || '{}');
+                var keys = Object.keys(s).filter(function(k) { return s[k]; });
+                if (keys.length > 0) {
+                    var el = document.getElementById(keys[0]);
                     if (el) el.classList.add('open');
                 }
-            });
-        } catch(e){}
+            } catch(e){}
+        }
     });
     // ── Quick Actions ─────────────────────────────────────────
     var _qafBak = null;
@@ -384,7 +401,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  🥛  MILK
                  ══════════════════════════════════════════════════ -->
             <?php if ($_module_enabled('milk') && $_can(['admin','manager','milkman','worker','veterinarian','accountant'])): ?>
-            <div class="nav-acc<?= $_acc(['milk','milk_analytics','milk_pricing','milk_sales','milk_customers','family_milk']) ?>" id="nacc-milk">
+            <div class="nav-acc<?= $_acc(['milk','milk_record','milk_analytics','milk_pricing','milk_sales','milk_customers','family_milk']) ?>" id="nacc-milk">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-milk')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8l2 6H6L8 2z"/><path d="M6 8v12a2 2 0 002 2h8a2 2 0 002-2V8"/></svg>
                     Milk
@@ -392,7 +409,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 </button>
                 <div class="nav-acc-body">
                     <?php if ($_can(['admin','manager','milkman','worker','veterinarian'])): ?>
-                    <a href="/modules/milk/record.php" class="nav-item">Add Milk Entry</a>
+                    <a href="/modules/milk/record.php" class="nav-item<?= $_nav_active('milk_record') ?>">Add Milk Entry</a>
                     <a href="/modules/milk/index.php" class="nav-item<?= $_nav_active('milk') ?>">Milk Records</a>
                     <?php endif; ?>
                     <?php if ($_can(['admin','manager','accountant'])): ?>
@@ -411,7 +428,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  🌾  FEED
                  ══════════════════════════════════════════════════ -->
             <?php if ($_module_enabled('feed_medicine') && $_can(['admin','manager','feed_worker','milkman','worker','veterinarian','accountant'])): ?>
-            <div class="nav-acc<?= $_acc(['feed_medicine','feed_log','feed_sales']) ?>" id="nacc-feed">
+            <div class="nav-acc<?= $_acc(['feed_medicine','feed_log','feed_form','feed_sales']) ?>" id="nacc-feed">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-feed')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
                     Feed
@@ -421,7 +438,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <a href="/modules/feed_medicine/feed_log.php" class="nav-item<?= $_nav_active('feed_log') ?>">Add Feed Entry</a>
                     <a href="/modules/feed_medicine/index.php" class="nav-item<?= $_nav_active('feed_medicine') ?>">Feed &amp; Medicine Stock</a>
                     <?php if ($_can(['admin','manager','accountant'])): ?>
-                    <a href="/modules/feed_medicine/feed_form.php" class="nav-item">Feed Purchases</a>
+                    <a href="/modules/feed_medicine/feed_form.php" class="nav-item<?= $_nav_active('feed_form') ?>">Feed Purchases</a>
                     <a href="/modules/sales/feed_sales.php" class="nav-item<?= $_nav_active('feed_sales') ?>">Feed Sales</a>
                     <?php endif; ?>
                 </div>
@@ -432,7 +449,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  💉  HEALTH
                  ══════════════════════════════════════════════════ -->
             <?php if ($_can(['admin','manager','milkman','veterinarian','worker'])): ?>
-            <div class="nav-acc<?= $_acc(['diagnosis','treatments','veterinarians','medicine_sales']) ?>" id="nacc-health">
+            <div class="nav-acc<?= $_acc(['diagnosis','treatments','veterinarians','medicine_purchases','medicine_sales']) ?>" id="nacc-health">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-health')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                     Health &amp; Treatment
@@ -448,7 +465,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <?php if ($_can(['admin','manager','accountant'])): ?>
                     <a href="/modules/treatments/veterinarians.php" class="nav-item<?= $_nav_active('veterinarians') ?>">Veterinarians</a>
                     <div style="font-size:.65rem;color:rgba(255,255,255,.3);padding:.4rem .75rem .1rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Medicine</div>
-                    <a href="/modules/feed_medicine/medicine_form.php" class="nav-item">Medicine Purchases</a>
+                    <a href="/modules/feed_medicine/medicine_form.php" class="nav-item<?= $_nav_active('medicine_purchases') ?>">Medicine Purchases</a>
                     <a href="/modules/sales/medicine_sales.php" class="nav-item<?= $_nav_active('medicine_sales') ?>">Medicine Sales</a>
                     <?php endif; ?>
                 </div>
@@ -508,7 +525,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  👷  WORKERS
                  ══════════════════════════════════════════════════ -->
             <?php if ($_module_enabled('workers') && $_can(['admin','manager','accountant'])): ?>
-            <div class="nav-acc<?= $_acc(['workers','my_tasks','payroll']) ?>" id="nacc-workers">
+            <div class="nav-acc<?= $_acc(['workers','worker_tasks','my_tasks','payroll']) ?>" id="nacc-workers">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-workers')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
                     Workers
@@ -605,7 +622,6 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <a href="/modules/subscription/index.php" class="nav-item<?= $_nav_active('subscription') ?>">
                         Subscription <?= farmPlanBadge() ?>
                     </a>
-                    <a href="/pricing.php" class="nav-item<?= $_nav_active('pricing') ?>">View Plans</a>
                     <?php endif; ?>
                     <?php if ($_can(['admin'])): ?>
                     <a href="/modules/admin/users.php"     class="nav-item<?= $_nav_active('admin_users') ?>">Users</a>
