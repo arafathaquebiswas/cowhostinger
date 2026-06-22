@@ -97,6 +97,77 @@ $pending_list = $db->query("
     WHERE py.status='pending' ORDER BY py.created_at ASC LIMIT 6
 ")->fetchAll();
 
+// ── Growth Analytics: 12-month SaaS revenue + new farms ─────────────────────
+$growth_12mo = $db->query("
+    SELECT DATE_FORMAT(paid_at,'%b %y') AS mo,
+           YEAR(paid_at) AS yr, MONTH(paid_at) AS mn,
+           COALESCE(SUM(amount),0) AS total,
+           COUNT(DISTINCT farm_id) AS paying_farms
+    FROM payments WHERE status='completed'
+      AND paid_at >= DATE_SUB(CURDATE(),INTERVAL 12 MONTH)
+    GROUP BY yr,mn,mo ORDER BY yr,mn
+")->fetchAll();
+
+$new_farms_12mo = $db->query("
+    SELECT DATE_FORMAT(created_at,'%b %y') AS mo,
+           YEAR(created_at) AS yr, MONTH(created_at) AS mn,
+           COUNT(*) AS total
+    FROM farms
+    WHERE created_at >= DATE_SUB(CURDATE(),INTERVAL 12 MONTH)
+    GROUP BY yr,mn,mo ORDER BY yr,mn
+")->fetchAll();
+
+// ── System Health ─────────────────────────────────────────────────────────────
+$active_sessions = 0;
+if (in_array('user_sessions', $tables)) {
+    $active_sessions = (int)$db->query(
+        "SELECT COUNT(DISTINCT user_id) FROM user_sessions WHERE last_active > DATE_SUB(NOW(), INTERVAL 30 MINUTE)"
+    )->fetchColumn();
+}
+
+$failed_logins_today = 0;
+if (in_array('login_attempts', $tables)) {
+    $failed_logins_today = (int)$db->query(
+        "SELECT COUNT(*) FROM login_attempts WHERE DATE(attempted_at)=CURDATE()"
+    )->fetchColumn();
+}
+
+$user_by_role = $db->query(
+    "SELECT role, COUNT(*) AS cnt FROM users GROUP BY role ORDER BY cnt DESC"
+)->fetchAll();
+$total_users = array_sum(array_column($user_by_role, 'cnt'));
+
+// ── Top-value farms (most SaaS payments) ─────────────────────────────────────
+$top_farms_revenue = $db->query("
+    SELECT f.farm_name, COALESCE(SUM(py.amount),0) AS total_paid,
+           COUNT(py.id) AS pay_ct
+    FROM farms f LEFT JOIN payments py ON py.farm_id=f.id AND py.status='completed'
+    GROUP BY f.id, f.farm_name
+    HAVING total_paid > 0 ORDER BY total_paid DESC LIMIT 6
+")->fetchAll();
+
+// ── Most active farms (by livestock count) ────────────────────────────────────
+$most_active_farms = $db->query("
+    SELECT f.farm_name, COUNT(c.id) AS cow_count, p.name AS plan_name
+    FROM farms f
+    JOIN subscriptions s ON s.farm_id=f.id
+    JOIN plans p ON p.id=s.plan_id
+    LEFT JOIN cows c ON c.farm_id=f.id AND c.status NOT IN ('sold','deceased')
+    WHERE s.status IN ('active','trial')
+    GROUP BY f.id, f.farm_name, p.name
+    HAVING cow_count > 0 ORDER BY cow_count DESC LIMIT 6
+")->fetchAll();
+
+// ── Alerts: Free farms not converting ────────────────────────────────────────
+$free_farms_alert = $db->query("
+    SELECT f.farm_name, DATEDIFF(CURDATE(), f.created_at) AS age_days, s.status
+    FROM farms f
+    JOIN subscriptions s ON s.farm_id=f.id
+    JOIN plans p ON p.id=s.plan_id
+    WHERE p.name='Free' AND s.status IN ('active','trial')
+    ORDER BY age_days DESC LIMIT 8
+")->fetchAll();
+
 $page_title = 'CEO Control Center';
 $active_nav = 'ceo_control';
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
@@ -339,6 +410,32 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
     font-size: .82rem;
     font-weight: 600;
     margin-bottom: .5rem;
+}
+
+/* ── Growth Analytics chart ─────── */
+.growth-chart-wrap { height:220px; position:relative; }
+
+/* ── System health cards ────────── */
+.sys-card {
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    padding:.85rem 1rem;
+    text-align:center;
+}
+.sys-card-val { font-size:1.6rem; font-weight:800; line-height:1; margin:.15rem 0 .15rem; }
+.sys-card-lbl { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-secondary); }
+
+/* ── Role chip ──────────────────── */
+.role-chip {
+    display:inline-flex;
+    align-items:center;
+    gap:.3rem;
+    padding:.25rem .6rem;
+    border-radius:99px;
+    font-size:.72rem;
+    font-weight:700;
+    white-space:nowrap;
 }
 </style>
 
@@ -775,5 +872,366 @@ foreach ($actions as [$icon,$title,$col,$bg,$url,$sub]):
         </div>
     </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════
+     GROWTH ANALYTICS — 12-Month Revenue + New Farms
+══════════════════════════════════════════════════════════════ -->
+<p class="dash-section">Growth Analytics</p>
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem">
+
+    <div class="card">
+        <div class="card-header">
+            <div style="font-weight:700;font-size:.9rem">📈 12-Month SaaS Revenue</div>
+            <span style="font-size:.75rem;color:var(--text-secondary)">Completed payments</span>
+        </div>
+        <div style="padding:.75rem 1rem">
+            <div class="growth-chart-wrap"><canvas id="ceoRevChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div style="font-weight:700;font-size:.9rem">🏘 New Farms / Month</div>
+            <span style="font-size:.75rem;color:var(--text-secondary)">Last 12 months</span>
+        </div>
+        <div style="padding:.75rem 1rem">
+            <div class="growth-chart-wrap"><canvas id="ceoFarmsChart"></canvas></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SYSTEM HEALTH
+══════════════════════════════════════════════════════════════ -->
+<p class="dash-section">System Health</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.65rem;margin-bottom:.75rem">
+    <div class="sys-card">
+        <div style="font-size:1.25rem">🟢</div>
+        <div class="sys-card-val" style="color:#16a34a"><?= $active_sessions ?></div>
+        <div class="sys-card-lbl">Active Sessions</div>
+    </div>
+    <div class="sys-card">
+        <div style="font-size:1.25rem">👥</div>
+        <div class="sys-card-val" style="color:#0284c7"><?= number_format($total_users) ?></div>
+        <div class="sys-card-lbl">Total Users</div>
+    </div>
+    <div class="sys-card">
+        <div style="font-size:1.25rem">🏠</div>
+        <div class="sys-card-val" style="color:#2D6A4F"><?= (int)$kpi['total_farms'] ?></div>
+        <div class="sys-card-lbl">Total Farms</div>
+    </div>
+    <div class="sys-card">
+        <div style="font-size:1.25rem">✅</div>
+        <div class="sys-card-val" style="color:#059669"><?= (int)$kpi['active_subs'] ?></div>
+        <div class="sys-card-lbl">Active Subs</div>
+    </div>
+    <div class="sys-card">
+        <div style="font-size:1.25rem"><?= $failed_logins_today > 5 ? '🚨' : '🔐' ?></div>
+        <div class="sys-card-val" style="color:<?= $failed_logins_today > 5 ? '#dc2626' : '#6b7280' ?>"><?= $failed_logins_today ?></div>
+        <div class="sys-card-lbl">Failed Logins Today</div>
+    </div>
+    <div class="sys-card">
+        <div style="font-size:1.25rem">🆓</div>
+        <div class="sys-card-val" style="color:#d97706"><?= count($free_farms_alert) ?></div>
+        <div class="sys-card-lbl">Free Plan</div>
+    </div>
+</div>
+
+<!-- Users by role -->
+<div class="card" style="margin-bottom:1rem">
+    <div class="card-header">
+        <div style="font-weight:700;font-size:.9rem">👤 Users by Role</div>
+        <span style="font-size:.75rem;color:var(--text-secondary)"><?= number_format($total_users) ?> total accounts</span>
+    </div>
+    <div style="padding:.75rem 1.1rem;display:flex;flex-wrap:wrap;gap:.4rem">
+    <?php
+    $role_colors = ['superadmin'=>['#7c3aed','#f5f3ff'],'admin'=>['#0284c7','#eff6ff'],'manager'=>['#059669','#ecfdf5'],'accountant'=>['#d97706','#fffbeb'],'vet'=>['#dc2626','#fef2f2'],'worker'=>['#6b7280','#f9fafb'],'support'=>['#0ea5e9','#f0f9ff']];
+    foreach ($user_by_role as $ur):
+        [$tc,$bg] = $role_colors[$ur['role']] ?? ['#475569','#f8fafc'];
+    ?>
+    <div class="role-chip" style="background:<?= $bg ?>;color:<?= $tc ?>">
+        <?= ucfirst(e($ur['role'])) ?>
+        <span style="background:<?= $tc ?>;color:#fff;border-radius:99px;padding:0 .4rem;font-size:.7rem"><?= (int)$ur['cnt'] ?></span>
+    </div>
+    <?php endforeach; ?>
+    </div>
+</div>
+
+<!-- Top farms by revenue + most active farms -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="card">
+        <div class="card-header">
+            <div style="font-weight:700;font-size:.9rem">💎 Top Farms by Revenue</div>
+            <span style="font-size:.75rem;color:var(--text-secondary)">All-time payments</span>
+        </div>
+        <?php if (empty($top_farms_revenue)): ?>
+        <div style="padding:2rem;text-align:center;color:var(--text-secondary);font-size:.83rem">No completed payments yet</div>
+        <?php else:
+            $max_pay = max(array_column($top_farms_revenue,'total_paid')) ?: 1;
+            foreach ($top_farms_revenue as $i => $fr):
+                $w = round($fr['total_paid'] / $max_pay * 100);
+                $medal = match($i){0=>'🥇',1=>'🥈',2=>'🥉',default=>''};
+        ?>
+        <div class="farm-row">
+            <div style="flex:1;min-width:0">
+                <div class="farm-name"><?= $medal ?> <?= e($fr['farm_name']) ?></div>
+                <div class="farm-meta"><?= (int)$fr['pay_ct'] ?> payment<?= $fr['pay_ct']!=1?'s':'' ?></div>
+                <div style="height:4px;background:var(--border);border-radius:99px;margin-top:.35rem;overflow:hidden">
+                    <div style="height:4px;background:#7c3aed;border-radius:99px;width:<?= $w ?>%"></div>
+                </div>
+            </div>
+            <div style="font-size:.88rem;font-weight:800;color:#7c3aed;flex-shrink:0;margin-left:.75rem">৳<?= number_format((float)$fr['total_paid'],0) ?></div>
+        </div>
+        <?php endforeach; endif; ?>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div style="font-weight:700;font-size:.9rem">🐄 Most Active Farms</div>
+            <span style="font-size:.75rem;color:var(--text-secondary)">By livestock count</span>
+        </div>
+        <?php if (empty($most_active_farms)): ?>
+        <div style="padding:2rem;text-align:center;color:var(--text-secondary);font-size:.83rem">No livestock data</div>
+        <?php else:
+            $max_cows = max(array_column($most_active_farms,'cow_count')) ?: 1;
+            foreach ($most_active_farms as $i => $mf):
+                $w = round($mf['cow_count'] / $max_cows * 100);
+                $pc = match($mf['plan_name']){'Enterprise'=>'#d97706','Pro'=>'#7c3aed','Basic'=>'#0284c7',default=>'#6b7280'};
+        ?>
+        <div class="farm-row">
+            <div style="flex:1;min-width:0">
+                <div class="farm-name"><?= e($mf['farm_name']) ?></div>
+                <div class="farm-meta">
+                    <span class="role-chip" style="background:<?= $pc ?>20;color:<?= $pc ?>;padding:.1rem .35rem;font-size:.65rem"><?= e($mf['plan_name']) ?></span>
+                </div>
+                <div style="height:4px;background:var(--border);border-radius:99px;margin-top:.35rem;overflow:hidden">
+                    <div style="height:4px;background:#16a34a;border-radius:99px;width:<?= $w ?>%"></div>
+                </div>
+            </div>
+            <div style="font-size:.88rem;font-weight:800;color:#16a34a;flex-shrink:0;margin-left:.75rem"><?= (int)$mf['cow_count'] ?> 🐄</div>
+        </div>
+        <?php endforeach; endif; ?>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     ALERTS PANEL — Free farms + High-risk
+══════════════════════════════════════════════════════════════ -->
+<?php if (!empty($free_farms_alert) || (int)$kpi['expired'] > 0 || (int)$kpi['suspended'] > 0 || $failed_logins_today > 5): ?>
+<p class="dash-section">Alerts Panel</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin-bottom:1rem">
+
+    <?php if (!empty($free_farms_alert)): ?>
+    <div class="card">
+        <div class="card-header" style="background:#fffbeb;border-bottom-color:#fde68a">
+            <div>
+                <div style="font-weight:700;font-size:.9rem;color:#92400e">🆓 Free Plan — Not Converting</div>
+                <div style="font-size:.72rem;color:#b45309"><?= count($free_farms_alert) ?> farm<?= count($free_farms_alert)!=1?'s':'' ?> on free tier</div>
+            </div>
+            <a href="/modules/ceo/subscriptions.php?plan=free" class="btn btn-xs btn-secondary">View All</a>
+        </div>
+        <?php foreach ($free_farms_alert as $ff):
+            $age = (int)$ff['age_days'];
+            $ac = $age >= 30 ? '#dc2626' : ($age >= 14 ? '#d97706' : '#6b7280');
+        ?>
+        <div class="farm-row">
+            <div style="flex:1;min-width:0">
+                <div class="farm-name"><?= e($ff['farm_name']) ?></div>
+                <div class="farm-meta">Registered <?= $age ?> day<?= $age!=1?'s':'' ?> ago</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem;flex-shrink:0">
+                <span style="font-size:.75rem;font-weight:700;color:<?= $ac ?>"><?= $age >= 30 ? '⚠ Stale' : ($age >= 14 ? 'Idle' : 'New') ?></span>
+                <a href="/modules/ceo/subscriptions.php?search=<?= urlencode($ff['farm_name']) ?>" class="btn btn-xs btn-primary" style="font-size:.68rem;padding:.2rem .5rem">Upgrade</a>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ((int)$kpi['expired'] > 0 || (int)$kpi['suspended'] > 0): ?>
+    <div class="card">
+        <div class="card-header" style="background:#fef2f2;border-bottom-color:#fecaca">
+            <div>
+                <div style="font-weight:700;font-size:.9rem;color:#b91c1c">🚨 High-Risk Farms</div>
+                <div style="font-size:.72rem;color:#7f1d1d"><?= (int)($kpi['expired']+$kpi['suspended']) ?> farm<?= ($kpi['expired']+$kpi['suspended'])!=1?'s':'' ?> need attention</div>
+            </div>
+            <a href="/modules/ceo/subscriptions.php?status=expired" class="btn btn-xs" style="background:#dc2626;border-color:#dc2626;color:#fff">Manage</a>
+        </div>
+        <div style="padding:.85rem 1.1rem;display:flex;flex-direction:column;gap:.65rem">
+            <?php if ((int)$kpi['expired'] > 0): ?>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .85rem;background:#fef2f2;border-radius:var(--radius);border:1px solid #fecaca">
+                <div>
+                    <div style="font-size:.83rem;font-weight:700;color:#b91c1c">⛔ Expired Subscriptions</div>
+                    <div style="font-size:.73rem;color:#7f1d1d">These farms have lost access</div>
+                </div>
+                <div style="font-size:1.5rem;font-weight:800;color:#dc2626"><?= (int)$kpi['expired'] ?></div>
+            </div>
+            <?php endif; ?>
+            <?php if ((int)$kpi['suspended'] > 0): ?>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .85rem;background:#fef2f2;border-radius:var(--radius);border:1px solid #fecaca">
+                <div>
+                    <div style="font-size:.83rem;font-weight:700;color:#b91c1c">🔒 Suspended Farms</div>
+                    <div style="font-size:.73rem;color:#7f1d1d">Access manually blocked</div>
+                </div>
+                <div style="font-size:1.5rem;font-weight:800;color:#dc2626"><?= (int)$kpi['suspended'] ?></div>
+            </div>
+            <?php endif; ?>
+            <?php if ($failed_logins_today > 5): ?>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .85rem;background:#fef2f2;border-radius:var(--radius);border:1px solid #fecaca">
+                <div>
+                    <div style="font-size:.83rem;font-weight:700;color:#b91c1c">🚨 High Failed Logins</div>
+                    <div style="font-size:.73rem;color:#7f1d1d">Possible brute-force activity</div>
+                </div>
+                <div style="font-size:1.5rem;font-weight:800;color:#dc2626"><?= $failed_logins_today ?></div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+</div>
+<?php endif; ?>
+
+<!-- ══════════════════════════════════════════════════════════
+     ROLE-BASED QUICK ACCESS CARDS
+══════════════════════════════════════════════════════════════ -->
+<p class="dash-section">Role-Based Access Management</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;margin-bottom:1.5rem">
+<?php
+$role_sections = [
+    ['👑', 'CEO Tools',       '#7c3aed', '#f5f3ff', 'superadmin', [
+        ['Plans & Pricing',      '/modules/ceo/plans.php'],
+        ['Subscriptions',        '/modules/ceo/subscriptions.php'],
+        ['Coupon Codes',         '/modules/ceo/coupons.php'],
+        ['Audit Log',            '/modules/ceo/audit.php'],
+    ]],
+    ['🏛', 'Farm Admin',      '#0284c7', '#eff6ff', 'admin', [
+        ['Farm Dashboard',       '/user_dashboard.php'],
+        ['Cow Management',       '/modules/cows/index.php'],
+        ['Financial Summary',    '/modules/finance/summary.php'],
+        ['Worker Management',    '/modules/workers/index.php'],
+    ]],
+    ['📋', 'Farm Manager',   '#059669', '#ecfdf5', 'manager', [
+        ['Milk Records',         '/modules/milk/index.php'],
+        ['Feed Logs',            '/modules/feed/index.php'],
+        ['Equipment',            '/modules/equipment/index.php'],
+        ['Reports',              '/modules/reports/index.php'],
+    ]],
+    ['💰', 'Accountant',     '#d97706', '#fffbeb', 'accountant', [
+        ['Finance Ledger',       '/modules/finance/index.php'],
+        ['Financial Summary',    '/modules/finance/summary.php'],
+        ['Financial Overview',   '/modules/finance/profit.php'],
+        ['Profitability',        '/modules/reports/profitability.php'],
+    ]],
+    ['🩺', 'Veterinarian',   '#dc2626', '#fef2f2', 'vet', [
+        ['Health Records',       '/modules/health/index.php'],
+        ['Treatments',           '/modules/health/treatments.php'],
+        ['Diagnoses',            '/modules/health/diagnosis.php'],
+        ['Cow Profiles',         '/modules/cows/index.php'],
+    ]],
+    ['🛠', 'Support Staff',  '#0ea5e9', '#f0f9ff', 'support', [
+        ['Support Dashboard',    '/modules/support/dashboard.php'],
+        ['Support Tickets',      '/modules/support/index.php'],
+        ['Farm List',            '/modules/super_admin/index.php'],
+        ['CEO Control',          '/modules/ceo/index.php'],
+    ]],
+];
+foreach ($role_sections as [$icon,$title,$color,$bg,$role_key,$links]):
+    $rc = 0;
+    foreach ($user_by_role as $ur) { if ($ur['role'] === $role_key) { $rc = (int)$ur['cnt']; break; } }
+?>
+<div style="background:<?= $bg ?>;border:1px solid <?= $color ?>30;border-radius:var(--radius-lg);overflow:hidden">
+    <div style="padding:.75rem 1rem;border-bottom:1px solid <?= $color ?>25;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:.45rem">
+            <span style="font-size:1.1rem"><?= $icon ?></span>
+            <span style="font-size:.84rem;font-weight:700;color:<?= $color ?>"><?= $title ?></span>
+        </div>
+        <?php if ($rc > 0): ?>
+        <span style="background:<?= $color ?>;color:#fff;border-radius:99px;font-size:.68rem;font-weight:700;padding:.15rem .45rem"><?= $rc ?></span>
+        <?php endif; ?>
+    </div>
+    <div style="padding:.4rem .5rem">
+        <?php foreach ($links as [$lbl,$url]): ?>
+        <a href="<?= e($url) ?>" style="display:flex;align-items:center;gap:.35rem;padding:.38rem .55rem;border-radius:6px;font-size:.8rem;font-weight:500;color:<?= $color ?>;text-decoration:none;transition:.12s" onmouseover="this.style.background='<?= $color ?>15'" onmouseout="this.style.background='transparent'">
+            <span style="opacity:.5">→</span> <?= $lbl ?>
+        </a>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endforeach; ?>
+</div>
+
+<!-- Chart.js for growth analytics -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.font.family = "'Inter','Segoe UI',system-ui,sans-serif";
+Chart.defaults.font.size   = 11;
+Chart.defaults.color       = '#6b7280';
+
+<?php
+// Build 12-month label array with zeros for missing months
+$mo_map = [];
+for ($i = 11; $i >= 0; $i--) {
+    $ts  = strtotime("-{$i} month");
+    $key = date('Y-m', $ts);
+    $mo_map[$key] = ['label' => date('M y', $ts), 'rev' => 0, 'farms' => 0];
+}
+foreach ($growth_12mo as $r) {
+    $key = date('Y-m', mktime(0,0,0,(int)$r['mn'],1,(int)$r['yr']));
+    if (isset($mo_map[$key])) $mo_map[$key]['rev'] = (float)$r['total'];
+}
+foreach ($new_farms_12mo as $r) {
+    $key = date('Y-m', mktime(0,0,0,(int)$r['mn'],1,(int)$r['yr']));
+    if (isset($mo_map[$key])) $mo_map[$key]['farms'] = (int)$r['total'];
+}
+$chart_labels  = array_column($mo_map, 'label');
+$chart_rev     = array_column($mo_map, 'rev');
+$chart_farms   = array_column($mo_map, 'farms');
+?>
+
+new Chart(document.getElementById('ceoRevChart'), {
+    type: 'line',
+    data: {
+        labels: <?= json_encode(array_values($chart_labels)) ?>,
+        datasets: [{
+            label: 'SaaS Revenue (৳)',
+            data: <?= json_encode(array_values($chart_rev)) ?>,
+            borderColor: '#7c3aed',
+            backgroundColor: 'rgba(124,58,237,.08)',
+            tension: .35, fill: true, pointRadius: 3
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => '৳' + c.raw.toLocaleString() } } },
+        scales: {
+            y: { grid: { color: '#f3f4f6' }, ticks: { callback: v => '৳' + v.toLocaleString() } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+
+new Chart(document.getElementById('ceoFarmsChart'), {
+    type: 'bar',
+    data: {
+        labels: <?= json_encode(array_values($chart_labels)) ?>,
+        datasets: [{
+            label: 'New Farms',
+            data: <?= json_encode(array_values($chart_farms)) ?>,
+            backgroundColor: 'rgba(2,132,199,.7)',
+            borderRadius: 4
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { grid: { color: '#f3f4f6' }, ticks: { stepSize: 1 } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+</script>
 
 <?php require_once dirname(__DIR__, 2) . '/includes/layout_footer.php'; ?>

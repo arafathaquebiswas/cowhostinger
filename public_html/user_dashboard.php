@@ -68,42 +68,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// ── Farm statistics ───────────────────────────────────────────────────────────
-$total_cows = (int)$db->query(
-    "SELECT COUNT(*) FROM cows WHERE status NOT IN ('sold','deceased','archived')"
-)->fetchColumn();
+// ── Farm statistics — scoped to this user's farm ─────────────────────────────
+$fid = (int)($_SESSION['farm_id'] ?? 0);
 
-$healthy_cows = (int)$db->query(
-    "SELECT COUNT(*) FROM cows WHERE status IN ('active','lactating','dry')"
-)->fetchColumn();
+$q = $db->prepare("SELECT COUNT(*) FROM cows WHERE farm_id=? AND status NOT IN ('sold','deceased','archived')");
+$q->execute([$fid]); $total_cows = (int)$q->fetchColumn();
 
-$sick_cows = (int)$db->query(
-    "SELECT COUNT(*) FROM cows WHERE status IN ('sick','quarantine')"
-)->fetchColumn();
+$q = $db->prepare("SELECT COUNT(*) FROM cows WHERE farm_id=? AND status IN ('active','lactating','dry')");
+$q->execute([$fid]); $healthy_cows = (int)$q->fetchColumn();
 
-$pregnant_cows = (int)$db->query(
-    "SELECT COUNT(*) FROM cows WHERE status='pregnant' OR is_pregnant=1"
-)->fetchColumn();
+$q = $db->prepare("SELECT COUNT(*) FROM cows WHERE farm_id=? AND status IN ('sick','quarantine')");
+$q->execute([$fid]); $sick_cows = (int)$q->fetchColumn();
 
-$milk_today = (float)$db->query(
-    "SELECT COALESCE(SUM(liters),0) FROM milk_records WHERE DATE(recorded_at) = CURDATE()"
-)->fetchColumn();
+$q = $db->prepare("SELECT COUNT(*) FROM cows WHERE farm_id=? AND (status='pregnant' OR is_pregnant=1)");
+$q->execute([$fid]); $pregnant_cows = (int)$q->fetchColumn();
 
-$milk_month = (float)$db->query(
-    "SELECT COALESCE(SUM(liters),0) FROM milk_records
-     WHERE MONTH(recorded_at)=MONTH(CURDATE()) AND YEAR(recorded_at)=YEAR(CURDATE())"
-)->fetchColumn();
+$q = $db->prepare("SELECT COALESCE(SUM(liters),0) FROM milk_records WHERE farm_id=? AND DATE(recorded_at)=CURDATE()");
+$q->execute([$fid]); $milk_today = (float)$q->fetchColumn();
 
-$alert_count = (int)$db->query("SELECT COUNT(*) FROM alerts WHERE is_read=0")->fetchColumn();
+$q = $db->prepare("SELECT COALESCE(SUM(liters),0) FROM milk_records WHERE farm_id=? AND MONTH(recorded_at)=MONTH(CURDATE()) AND YEAR(recorded_at)=YEAR(CURDATE())");
+$q->execute([$fid]); $milk_month = (float)$q->fetchColumn();
 
-// Recent cows
-$recent_cows = $db->query(
+$q = $db->prepare("SELECT COUNT(*) FROM alerts WHERE farm_id=? AND is_read=0");
+$q->execute([$fid]); $alert_count = (int)$q->fetchColumn();
+
+// Recent cows (farm-scoped)
+$q = $db->prepare(
     "SELECT id, tag_number, breed, status, health_status, birth_date
-     FROM cows
-     WHERE status NOT IN ('sold','deceased','archived')
-     ORDER BY created_at DESC
-     LIMIT 8"
-)->fetchAll();
+     FROM cows WHERE farm_id=? AND status NOT IN ('sold','deceased','archived')
+     ORDER BY created_at DESC LIMIT 8"
+);
+$q->execute([$fid]); $recent_cows = $q->fetchAll();
 
 // User profile from DB (to get farm_name, phone)
 $profile_row = $db->prepare("SELECT name, farm_name, phone FROM users WHERE id=?");

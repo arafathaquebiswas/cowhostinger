@@ -472,7 +472,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  📊  FINANCE & REPORTS
                  ══════════════════════════════════════════════════ -->
             <?php if ($_can(['admin','manager','accountant'])): ?>
-            <div class="nav-acc<?= $_acc(['finance','finance_charts','reports','profit_engine','profit_monthly','profit_yearly','profit_compare','profitability']) ?>" id="nacc-finance">
+            <div class="nav-acc<?= $_acc(['finance','finance_summary','finance_charts','reports','profit_engine','profit_monthly','profit_yearly','profit_compare','profitability']) ?>" id="nacc-finance">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-finance')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                     Finance &amp; Reports
@@ -480,6 +480,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 </button>
                 <div class="nav-acc-body">
                     <?php if ($_module_enabled('finance') && canAccess('finance.view')): ?>
+                    <a href="/modules/finance/summary.php" class="nav-item<?= $_nav_active('finance_summary') ?>">Financial Summary</a>
                     <a href="/modules/finance/profit.php" class="nav-item<?= $_nav_active('profit_engine') ?>">Financial Overview</a>
                     <a href="/modules/finance/profit.php?tab=compare&amp;preset=monthly" class="nav-item<?= $_nav_active('profit_monthly') ?>">Monthly Comparison</a>
                     <a href="/modules/finance/profit.php?tab=compare&amp;preset=yearly"  class="nav-item<?= $_nav_active('profit_yearly') ?>">Yearly Comparison</a>
@@ -630,20 +631,37 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             </div>
             <!-- Action items -->
             <div class="qaf-menu">
-                <?php if ($_can(['admin','worker','veterinarian']) && $_module_enabled('milk')): ?>
+                <?php if ($_can(['superadmin'])): ?>
+                <a href="/modules/ceo/subscriptions.php" class="qaf-item" data-qaf-id="ceo_subs"><span class="qaf-chk">✓</span><span class="qaf-ico">📋</span> Subscriptions</a>
+                <a href="/modules/ceo/subscriptions.php?status=expired" class="qaf-item" data-qaf-id="ceo_expired"><span class="qaf-chk">✓</span><span class="qaf-ico">⛔</span> Expired Farms</a>
+                <a href="/modules/super_admin/payments.php" class="qaf-item" data-qaf-id="ceo_payments"><span class="qaf-chk">✓</span><span class="qaf-ico">💳</span> Pending Payments</a>
+                <a href="/modules/ceo/plans.php" class="qaf-item" data-qaf-id="ceo_plans"><span class="qaf-chk">✓</span><span class="qaf-ico">💲</span> Plans & Pricing</a>
+                <a href="/modules/ceo/coupons.php" class="qaf-item" data-qaf-id="ceo_coupons"><span class="qaf-chk">✓</span><span class="qaf-ico">🏷</span> Coupons</a>
+                <a href="/modules/super_admin/index.php" class="qaf-item" data-qaf-id="ceo_farms"><span class="qaf-chk">✓</span><span class="qaf-ico">🏘</span> All Farms</a>
+                <a href="/modules/ceo/audit.php" class="qaf-item" data-qaf-id="ceo_audit"><span class="qaf-chk">✓</span><span class="qaf-ico">📜</span> Audit Log</a>
+                <a href="/modules/support/index.php" class="qaf-item" data-qaf-id="ceo_support"><span class="qaf-chk">✓</span><span class="qaf-ico">🎫</span> Support Tickets</a>
+                <?php endif; ?>
+                <?php if ($_can(['support'])): ?>
+                <a href="/modules/support/index.php" class="qaf-item" data-qaf-id="support_tickets"><span class="qaf-chk">✓</span><span class="qaf-ico">🎫</span> Open Tickets</a>
+                <a href="/modules/super_admin/index.php" class="qaf-item" data-qaf-id="support_farms"><span class="qaf-chk">✓</span><span class="qaf-ico">🏘</span> Farm List</a>
+                <?php endif; ?>
+                <?php if ($_can(['admin','worker','veterinarian','manager']) && $_module_enabled('milk')): ?>
                 <a href="/modules/milk/record.php" class="qaf-item" data-qaf-id="milk"><span class="qaf-chk">✓</span><span class="qaf-ico">🥛</span> Add Milk</a>
                 <?php endif; ?>
-                <?php if ($_can(['admin','worker','accountant']) && $_module_enabled('feed_medicine')): ?>
+                <?php if ($_can(['admin','worker','accountant','manager']) && $_module_enabled('feed_medicine')): ?>
                 <a href="/modules/feed_medicine/feed_log.php" class="qaf-item" data-qaf-id="feed"><span class="qaf-chk">✓</span><span class="qaf-ico">🌾</span> Add Feed</a>
                 <?php endif; ?>
                 <?php if ($_can(['admin','manager','veterinarian','worker'])): ?>
                 <a href="/modules/treatments/form.php" class="qaf-item" data-qaf-id="treatment"><span class="qaf-chk">✓</span><span class="qaf-ico">💊</span> Add Treatment</a>
                 <?php endif; ?>
-                <?php if ($_can(['admin']) && $_module_enabled('cows')): ?>
+                <?php if ($_can(['admin','manager']) && $_module_enabled('cows')): ?>
                 <a href="/modules/cows/form.php" class="qaf-item" data-qaf-id="cow"><span class="qaf-chk">✓</span><span class="qaf-ico">🐄</span> Add Cow</a>
                 <?php endif; ?>
-                <?php if ($_can(['admin','accountant']) && $_module_enabled('sales')): ?>
+                <?php if ($_can(['admin','accountant','manager']) && $_module_enabled('sales')): ?>
                 <a href="/modules/sales/buyers.php" class="qaf-item" data-qaf-id="buyer"><span class="qaf-chk">✓</span><span class="qaf-ico">🛒</span> Add Buyer</a>
+                <?php endif; ?>
+                <?php if ($_can(['admin','accountant','manager']) && $_module_enabled('finance')): ?>
+                <a href="/modules/finance/summary.php" class="qaf-item" data-qaf-id="fin_summary"><span class="qaf-chk">✓</span><span class="qaf-ico">💰</span> Financial Summary</a>
                 <?php endif; ?>
                 <?php if ($_can(['worker'])): ?>
                 <a href="/modules/workers/my_tasks.php" class="qaf-item" data-qaf-id="tasks"><span class="qaf-chk">✓</span><span class="qaf-ico">✅</span> My Tasks</a>

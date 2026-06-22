@@ -104,12 +104,13 @@ $milk_per_cow   = $cow_lactating > 0 ? round($milk_tm / $cow_lactating, 1) : 0;
 $milk_pct_wk    = pctChange($milk_lw, $milk_tw);
 
 // Top 5 milk cows this month
+$ff_c = farmFilter('c');
 $q = $db->prepare(
-    "SELECT c.tag_number, c.name AS cow_name, COALESCE(SUM(r.liters),0) AS total_liters
+    "SELECT c.tag_number, c.tag_number AS cow_name, COALESCE(SUM(r.liters),0) AS total_liters
      FROM cows c
      LEFT JOIN milk_records r ON r.cow_id=c.id AND r.contamination_flag=0
          AND DATE(r.recorded_at) BETWEEN ? AND ?
-     WHERE {$ff}
+     WHERE {$ff_c}
      GROUP BY c.id ORDER BY total_liters DESC LIMIT 5"
 );
 $q->execute([$m_from, $m_to]); $top_cows = $q->fetchAll();
@@ -226,19 +227,24 @@ arsort($exp_parts); $top_exp_cat = array_key_first($exp_parts) ?? '—';
 $top_exp_pct = $fin_ytd['total_exp'] > 0
     ? round((reset($exp_parts) / $fin_ytd['total_exp']) * 100, 0) : 0;
 
+// ── Period-over-period change helpers ────────────────────────────────────────
+$rev_change = pctChange($fin_lm['total_rev'], $fin_tm['total_rev']);
+$exp_change = pctChange($fin_lm['total_exp'], $fin_tm['total_exp']);
+$net_change = pctChange(abs($fin_lm['net']), $fin_tm['net']);
+
 // ── AI Insights ──────────────────────────────────────────────────────────────
 $ai_insights = [];
 
 // Profit trend
 if ($rev_change !== null) {
-    $dir  = $fin_tm['revenue'] > $fin_lm['revenue'] ? 'up' : 'down';
+    $dir  = $fin_tm['total_rev'] > $fin_lm['total_rev'] ? 'up' : 'down';
     $col  = $dir === 'up' ? '#059669' : '#dc2626';
     $icon = $dir === 'up' ? '📈' : '📉';
     $ai_insights[] = [
         'icon' => $icon, 'color' => $col,
         'text' => "Revenue is <strong style='color:{$col}'>" . ($dir === 'up' ? 'up' : 'down')
             . " " . abs($rev_change) . "%</strong> vs last month"
-            . ($fin_tm['revenue'] > 0 ? " (৳" . number_format($fin_tm['revenue'], 0) . " this month)" : ""),
+            . ($fin_tm['total_rev'] > 0 ? " (৳" . number_format($fin_tm['total_rev'], 0) . " this month)" : ""),
     ];
 }
 
@@ -296,7 +302,7 @@ $compare_rows = [
 
 // ── Recent transactions (last 10) ─────────────────────────────────────────────
 $q = $db->prepare(
-    "SELECT transaction_date, category, amount, type, description
+    "SELECT transaction_date, category, amount, type, notes AS description
      FROM finance_transactions WHERE {$ff}
      ORDER BY transaction_date DESC, id DESC LIMIT 10"
 );
