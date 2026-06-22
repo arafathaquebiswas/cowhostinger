@@ -15,6 +15,7 @@ $uid = (int)$_SESSION['user_id'];
         "offer_label"  => "ALTER TABLE plans ADD COLUMN offer_label  VARCHAR(100) DEFAULT NULL AFTER offer_active",
         "offer_end"    => "ALTER TABLE plans ADD COLUMN offer_end    DATE DEFAULT NULL AFTER offer_label",
         "is_featured"  => "ALTER TABLE plans ADD COLUMN is_featured  TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
+        "can_payroll"  => "ALTER TABLE plans ADD COLUMN can_payroll  TINYINT(1) NOT NULL DEFAULT 0 AFTER can_milk_analytics",
     ];
     foreach ($needed as $col => $sql) {
         if (!in_array($col, $existing)) {
@@ -63,6 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $can_finance      = isset($_POST['can_finance'])        ? 1 : 0;
         $can_reports      = isset($_POST['can_reports'])        ? 1 : 0;
         $can_milk_analytics = isset($_POST['can_milk_analytics']) ? 1 : 0;
+        $can_payroll      = isset($_POST['can_payroll'])        ? 1 : 0;
         $is_featured      = isset($_POST['is_featured'])        ? 1 : 0;
         $notes            = sanitize($_POST['notes'] ?? '');
 
@@ -77,14 +79,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 cows_limit=?, users_limit=?, workers_limit=?,
                 equipment_limit=?, feed_limit=?, medicine_limit=?, diagnosis_limit=?,
                 can_export=?, can_analytics=?, can_finance=?, can_reports=?, can_milk_analytics=?,
-                is_featured=?
+                can_payroll=?, is_featured=?
              WHERE id=?"
         )->execute([
             $new_price, $new_billing ?: null,
             $cows_limit, $users_limit, $workers_limit,
             $equipment_limit, $feed_limit, $medicine_limit, $diagnosis_limit,
             $can_export, $can_analytics, $can_finance, $can_reports, $can_milk_analytics,
-            $is_featured,
+            $can_payroll, $is_featured,
             $plan_id,
         ]);
 
@@ -246,7 +248,7 @@ function effectivePrice(array $p): array {
 <?php foreach ($plans as $p):
     $is_free = ($p['name'] === 'Free');
     $col = match($p['name']){
-        'Free'=>'#6b7280','Basic'=>'#0284c7','Pro'=>'#7c3aed','Enterprise'=>'#d97706',default=>'#6b7280'
+        'Free'=>'#6b7280','Starter'=>'#0284c7','Pro'=>'#7c3aed','Enterprise'=>'#111827',default=>'#6b7280'
     };
     $ep = $is_free ? null : effectivePrice($p);
 ?>
@@ -327,6 +329,7 @@ function effectivePrice(array $p): array {
                 ['can_export',         'Export Data'],
                 ['can_analytics',      'Analytics'],
                 ['can_milk_analytics', 'Milk Analytics'],
+                ['can_payroll',        'Payroll'],
             ] as [$fkey, $flabel]):
                 $on = (bool)$p[$fkey]; ?>
             <span style="color:<?= $on?'#16a34a':'#dc2626' ?>;font-weight:600">
@@ -421,11 +424,12 @@ function effectivePrice(array $p): array {
                 <div style="font-size:.75rem;font-weight:600;color:var(--text-muted);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.04em">Features</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.25rem;margin-bottom:.5rem">
                     <?php foreach ([
-                        ['can_export',         'Export Data',    $p['can_export']],
-                        ['can_analytics',      'Analytics',      $p['can_analytics']],
-                        ['can_finance',        'Finance Module', $p['can_finance']],
-                        ['can_reports',        'Reports',        $p['can_reports']],
-                        ['can_milk_analytics', 'Milk Analytics', $p['can_milk_analytics']],
+                        ['can_export',         'Export Data',       $p['can_export']],
+                        ['can_analytics',      'Analytics',         $p['can_analytics']],
+                        ['can_finance',        'Finance Module',    $p['can_finance']],
+                        ['can_reports',        'Reports',           $p['can_reports']],
+                        ['can_milk_analytics', 'Milk Analytics',    $p['can_milk_analytics']],
+                        ['can_payroll',        'Payroll Management',$p['can_payroll'] ?? 0],
                     ] as [$fname,$flabel,$fval]): ?>
                     <label style="display:flex;align-items:center;gap:.35rem;font-size:.8rem;cursor:pointer">
                         <input type="checkbox" name="<?= $fname ?>" value="1" <?= $fval?'checked':'' ?>>

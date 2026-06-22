@@ -21,6 +21,7 @@ $usage = farmAllUsage();
         "offer_label"  => "ALTER TABLE plans ADD COLUMN offer_label  VARCHAR(100) DEFAULT NULL AFTER offer_active",
         "offer_end"    => "ALTER TABLE plans ADD COLUMN offer_end    DATE DEFAULT NULL AFTER offer_label",
         "is_featured"  => "ALTER TABLE plans ADD COLUMN is_featured  TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
+        "can_payroll"  => "ALTER TABLE plans ADD COLUMN can_payroll  TINYINT(1) NOT NULL DEFAULT 0 AFTER can_milk_analytics",
     ];
     foreach ($needed as $col => $sql) {
         if (!in_array($col, $existing)) {
@@ -275,6 +276,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 ['Milk Analytics',  $plan['can_milk_analytics'] ?? 0],
                 ['Data Export',     $plan['can_export']         ?? 0],
                 ['Advanced Charts', $plan['can_analytics']      ?? 0],
+                ['Payroll Management', $plan['can_payroll']     ?? 0],
                 ['Breeding Records', 1],
                 ['Alerts',          1],
                 ['Diagnosis',       1],
@@ -347,6 +349,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <li style="color:<?= $pl['can_reports']        ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_reports']        ? '&#x2713;' : '&#x2717;' ?> Reports</li>
             <li style="color:<?= $pl['can_export']         ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_export']         ? '&#x2713;' : '&#x2717;' ?> Export Data</li>
             <li style="color:<?= $pl['can_milk_analytics'] ? '#059669' : '#9CA3AF' ?>"><?= $pl['can_milk_analytics'] ? '&#x2713;' : '&#x2717;' ?> Milk Analytics</li>
+            <li style="color:<?= ($pl['can_payroll'] ?? 0) ? '#059669' : '#9CA3AF' ?>"><?= ($pl['can_payroll'] ?? 0) ? '&#x2713;' : '&#x2717;' ?> Payroll Management</li>
         </ul>
         <?php if ($is_current): ?>
         <div class="btn btn-primary btn-block" style="background:#7C3AED;border:none;text-align:center;cursor:default">Current Plan</div>
@@ -371,7 +374,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div>
             <div style="font-weight:700;color:#4C1D95;margin-bottom:.2rem">Need help? Contact AB IT</div>
             <div style="font-size:.85rem;color:#6B7280">
-                WhatsApp / Call: <strong>+880-XXX-XXXXXX</strong> &nbsp;·&nbsp;
+                WhatsApp / Call: <strong>01316816333</strong> &nbsp;·&nbsp;
                 Email: <strong>support@abit.com.bd</strong> &nbsp;·&nbsp;
                 We accept bKash, Nagad, Rocket &amp; Bank Transfer
             </div>

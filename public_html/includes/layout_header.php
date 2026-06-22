@@ -455,15 +455,21 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <!-- ══════════════════════════════════════════════════
                  👷  WORKERS
                  ══════════════════════════════════════════════════ -->
-            <?php if ($_module_enabled('workers') && $_can(['admin','manager'])): ?>
-            <div class="nav-acc<?= $_acc(['workers','my_tasks']) ?>" id="nacc-workers">
+            <?php if ($_module_enabled('workers') && $_can(['admin','manager','accountant'])): ?>
+            <div class="nav-acc<?= $_acc(['workers','my_tasks','payroll']) ?>" id="nacc-workers">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-workers')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
                     Workers
                     <span class="nav-acc-chv">›</span>
                 </button>
                 <div class="nav-acc-body">
+                    <?php if ($_can(['admin','manager'])): ?>
                     <a href="/modules/workers/index.php" class="nav-item<?= $_nav_active('workers') ?>">Worker List</a>
+                    <a href="/modules/workers/tasks.php" class="nav-item<?= $_nav_active('worker_tasks') ?>">Tasks</a>
+                    <?php endif; ?>
+                    <?php if ($_can(['admin','manager','accountant'])): ?>
+                    <a href="/modules/payroll/index.php" class="nav-item<?= $_nav_active('payroll') ?>">Payroll</a>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php endif; ?>
@@ -547,6 +553,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <a href="/modules/subscription/index.php" class="nav-item<?= $_nav_active('subscription') ?>">
                         Subscription <?= farmPlanBadge() ?>
                     </a>
+                    <a href="/pricing.php" class="nav-item<?= $_nav_active('pricing') ?>">View Plans</a>
                     <?php endif; ?>
                     <?php if ($_can(['admin'])): ?>
                     <a href="/modules/admin/users.php"     class="nav-item<?= $_nav_active('admin_users') ?>">Users</a>

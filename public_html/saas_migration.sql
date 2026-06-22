@@ -20,7 +20,7 @@ ALTER TABLE `plans`
 
 -- ── 2. Seed / update default plans ───────────────────────────────────────────
 --     Plan 1 = Free (trial)
---     Plan 2 = Basic
+--     Plan 2 = Starter (renamed from Basic in migration 010)
 --     Plan 3 = Pro
 --     Plan 4 = Enterprise
 

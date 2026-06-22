@@ -56,6 +56,11 @@ function canAccess(string $feature): bool {
 
         'analytics.view'   => (bool)$sub['can_analytics'],
 
+        'payroll.view',
+        'payroll.create',
+        'payroll.approve',
+        'payroll.process'  => (bool)$sub['can_payroll'],
+
         // ── Resource count gates ───────────────────────────────────────────────
         'cow.create'       => resourceUsage('cows')['allowed'],
         'worker.create'    => resourceUsage('workers')['allowed'],
@@ -123,6 +128,7 @@ function _featureDeniedMessage(string $feature): string {
         str_starts_with($feature, 'report')    => 'Reports & exports require a paid plan. Upgrade to unlock.',
         str_starts_with($feature, 'milk')      => 'Milk Analytics requires a paid plan. Upgrade to unlock.',
         str_starts_with($feature, 'analytics') => 'Advanced analytics requires a paid plan. Upgrade to unlock.',
+        str_starts_with($feature, 'payroll')   => 'Payroll Management requires the Pro plan or higher. Upgrade to unlock.',
         str_ends_with($feature, '.create')     => 'Plan limit reached. Upgrade your plan to add more.',
         default                                => 'This feature is not available on your current plan. Upgrade to unlock.',
     };

@@ -35,7 +35,7 @@ function _subEngine(): array {
                     p.feed_limit, p.medicine_limit, p.diagnosis_limit,
                     p.users_limit, p.can_export, p.can_analytics,
                     p.can_finance, p.can_reports, p.can_milk_analytics,
-                    p.billing_days
+                    p.can_payroll, p.billing_days
              FROM farms f
              LEFT JOIN subscriptions s ON s.farm_id = f.id
              LEFT JOIN plans p ON p.id = s.plan_id
@@ -126,6 +126,7 @@ function _subEngine(): array {
         'can_finance'        => (bool)($data['can_finance']        ?? false),
         'can_reports'        => (bool)($data['can_reports']        ?? false),
         'can_milk_analytics' => (bool)($data['can_milk_analytics'] ?? false),
+        'can_payroll'        => (bool)($data['can_payroll']        ?? false),
     ];
 }
 
@@ -148,18 +149,19 @@ function _subFree(string $farm_status = 'active'): array {
         'is_suspended'     => $is_suspended,
         'is_blocked'       => $is_suspended,
         'is_unlimited'     => false,
-        'cows_limit'       => 5,
-        'workers_limit'    => 2,
+        'cows_limit'       => 20,
+        'workers_limit'    => 3,
         'equipment_limit'  => 5,
-        'feed_limit'       => 5,
-        'medicine_limit'   => 5,
-        'diagnosis_limit'  => 5,
-        'users_limit'      => 2,
-        'can_export'         => false,
+        'feed_limit'       => null,
+        'medicine_limit'   => null,
+        'diagnosis_limit'  => null,
+        'users_limit'      => 3,
+        'can_export'         => true,
         'can_analytics'      => false,
-        'can_finance'        => false,
+        'can_finance'        => true,
         'can_reports'        => false,
         'can_milk_analytics' => false,
+        'can_payroll'        => false,
     ];
 }
 
@@ -193,6 +195,7 @@ function _subUnlimited(): array {
         'can_finance'        => true,
         'can_reports'        => true,
         'can_milk_analytics' => true,
+        'can_payroll'        => true,
     ];
 }
 

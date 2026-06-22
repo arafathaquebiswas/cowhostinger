@@ -102,6 +102,7 @@ $module_info = [
     'milk'         => ['label' => 'Milk Production',   'desc' => 'Record daily milk output, fat %, quality flags, and revenue.'],
     'sales'        => ['label' => 'Sales',             'desc' => 'Cow sales and meat sales with profit/loss calculation.'],
     'workers'      => ['label' => 'Worker Management', 'desc' => 'Employee records, salaries, and task assignments.'],
+    'payroll'      => ['label' => 'Payroll Management','desc' => 'Monthly payroll processing, salary slips, and payment tracking.'],
     'feed_medicine'=> ['label' => 'Feed & Medicine',   'desc' => 'Inventory management for feed and medicine with low-stock alerts.'],
     'equipment'    => ['label' => 'Equipment',         'desc' => 'Equipment CRUD, status tracking, and maintenance schedule.'],
     'maintenance'  => ['label' => 'Farm Maintenance',  'desc' => 'Area/infrastructure maintenance logs and purchase tracking.'],
