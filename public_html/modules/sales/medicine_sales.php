@@ -11,6 +11,16 @@ $uid   = (int)$_SESSION['user_id'];
 $today = date('Y-m-d');
 $errors = [];
 
+// Inline migration for new columns
+$ms_cols = array_column($db->query("SHOW COLUMNS FROM medicine_sales")->fetchAll(), 'Field');
+if (!in_array('buyer_phone', $ms_cols))    $db->exec("ALTER TABLE medicine_sales ADD COLUMN buyer_phone VARCHAR(30) DEFAULT NULL AFTER buyer_name");
+if (!in_array('buyer_address', $ms_cols))  $db->exec("ALTER TABLE medicine_sales ADD COLUMN buyer_address VARCHAR(255) DEFAULT NULL AFTER buyer_phone");
+if (!in_array('payment_method', $ms_cols)) $db->exec("ALTER TABLE medicine_sales ADD COLUMN payment_method ENUM('cash','bank','mobile_banking','credit','other') NOT NULL DEFAULT 'cash'");
+if (!in_array('payment_status', $ms_cols)) $db->exec("ALTER TABLE medicine_sales ADD COLUMN payment_status ENUM('paid','pending','partial') NOT NULL DEFAULT 'paid'");
+if (!in_array('amount_paid', $ms_cols))    $db->exec("ALTER TABLE medicine_sales ADD COLUMN amount_paid DECIMAL(12,2) NOT NULL DEFAULT 0.00");
+if (!in_array('cost_price', $ms_cols))     $db->exec("ALTER TABLE medicine_sales ADD COLUMN cost_price DECIMAL(12,2) NOT NULL DEFAULT 0.00");
+if (!in_array('profit', $ms_cols))         $db->exec("ALTER TABLE medicine_sales ADD COLUMN profit DECIMAL(12,2) NOT NULL DEFAULT 0.00");
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST[CSRF_TOKEN_NAME] ?? '')) {
         flashMessage('error', 'Invalid request.');
@@ -23,18 +33,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/modules/sales/medicine_sales.php');
     }
 
-    $med_id    = (int)($_POST['medicine_item_id'] ?? 0) ?: null;
-    $item_name = sanitize($_POST['item_name'] ?? '');
-    $qty       = (float)($_POST['quantity'] ?? 0);
-    $unit      = sanitize($_POST['unit'] ?? 'unit');
-    $ppu       = (float)($_POST['price_per_unit'] ?? 0);
-    $total     = round($qty * $ppu, 2);
-    $buyer     = sanitize($_POST['buyer_name'] ?? '');
-    $sale_date = trim($_POST['sale_date'] ?? '');
-    $notes     = sanitize($_POST['notes'] ?? '');
+    $med_id      = (int)($_POST['medicine_item_id'] ?? 0) ?: null;
+    $item_name   = sanitize($_POST['item_name'] ?? '');
+    $qty         = (float)($_POST['quantity'] ?? 0);
+    $unit        = sanitize($_POST['unit'] ?? 'unit');
+    $ppu         = (float)($_POST['price_per_unit'] ?? 0);
+    $total       = round($qty * $ppu, 2);
+    $buyer       = sanitize($_POST['buyer_name'] ?? '');
+    $buyer_phone = sanitize($_POST['buyer_phone'] ?? '');
+    $buyer_addr  = sanitize($_POST['buyer_address'] ?? '');
+    $pay_method  = sanitize($_POST['payment_method'] ?? 'cash');
+    $pay_status  = sanitize($_POST['payment_status'] ?? 'paid');
+    $amount_paid = (float)($_POST['amount_paid'] ?? $total);
+    $sale_date   = trim($_POST['sale_date'] ?? '');
+    $notes       = sanitize($_POST['notes'] ?? '');
+    if (!in_array($pay_method, ['cash','bank','mobile_banking','credit','other'], true)) $pay_method = 'cash';
+    if (!in_array($pay_status, ['paid','pending','partial'], true)) $pay_status = 'paid';
+    if ($pay_status === 'paid') $amount_paid = $total;
+    if ($pay_status === 'pending') $amount_paid = 0;
 
     if ($med_id) {
-        $mn = $db->prepare("SELECT item_name, unit, quantity FROM medicine_inventory WHERE id = ? AND farm_id = ?");
+        $mn = $db->prepare("SELECT item_name, unit, quantity, cost_per_unit FROM medicine_inventory WHERE id = ? AND farm_id = ?");
         $mn->execute([$med_id, fid()]);
         $mn_row = $mn->fetch();
         if ($mn_row) { if ($item_name === '') $item_name = $mn_row['item_name']; if ($unit === 'unit') $unit = $mn_row['unit']; }
@@ -55,8 +74,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         try {
             $db->beginTransaction();
-            $db->prepare("INSERT INTO medicine_sales (farm_id,medicine_item_id,item_name,quantity,unit,price_per_unit,total_amount,buyer_name,sale_date,notes,recorded_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
-               ->execute([fid(), $med_id, $item_name, $qty, $unit, $ppu, $total, $buyer ?: null, $sale_date, $notes ?: null, $uid]);
+            $cost   = (isset($mn_row) && (float)($mn_row['cost_per_unit'] ?? 0) > 0) ? round($qty * (float)$mn_row['cost_per_unit'], 2) : 0.0;
+            $profit = round($total - $cost, 2);
+            $db->prepare("INSERT INTO medicine_sales (farm_id,medicine_item_id,item_name,quantity,unit,price_per_unit,total_amount,buyer_name,buyer_phone,buyer_address,payment_method,payment_status,amount_paid,cost_price,profit,sale_date,notes,recorded_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+               ->execute([fid(), $med_id, $item_name, $qty, $unit, $ppu, $total, $buyer ?: null, $buyer_phone ?: null, $buyer_addr ?: null, $pay_method, $pay_status, $amount_paid, $cost, $profit, $sale_date, $notes ?: null, $uid]);
             $sale_id = (int)$db->lastInsertId();
             if ($med_id) {
                 $db->prepare("UPDATE medicine_inventory SET quantity = quantity - ? WHERE id = ? AND farm_id = ?")->execute([$qty, $med_id, fid()]);
@@ -136,6 +157,32 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <div class="form-group">
                     <label class="form-label">Buyer Name</label>
                     <input type="text" name="buyer_name" class="form-control" maxlength="150" value="<?= e($_POST['buyer_name'] ?? '') ?>">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Buyer Phone</label>
+                    <input type="text" name="buyer_phone" class="form-control" maxlength="30" value="<?= e($_POST['buyer_phone'] ?? '') ?>">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Buyer Address</label>
+                    <input type="text" name="buyer_address" class="form-control" maxlength="255" value="<?= e($_POST['buyer_address'] ?? '') ?>">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+                    <div class="form-group">
+                        <label class="form-label">Payment Method</label>
+                        <select name="payment_method" class="form-control">
+                            <?php foreach (['cash'=>'Cash','bank'=>'Bank Transfer','mobile_banking'=>'Mobile Banking','credit'=>'Credit','other'=>'Other'] as $v=>$l): ?>
+                            <option value="<?= $v ?>" <?= ($_POST['payment_method']??'cash')===$v?'selected':'' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Payment Status</label>
+                        <select name="payment_status" class="form-control">
+                            <?php foreach (['paid'=>'Paid','pending'=>'Pending','partial'=>'Partial'] as $v=>$l): ?>
+                            <option value="<?= $v ?>" <?= ($_POST['payment_status']??'paid')===$v?'selected':'' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Sale Date <span style="color:var(--danger)">*</span></label>

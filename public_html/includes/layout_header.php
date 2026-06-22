@@ -456,6 +456,34 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
             <?php endif; ?>
 
             <!-- ══════════════════════════════════════════════════
+                 📦  INVENTORY
+                 ══════════════════════════════════════════════════ -->
+            <?php if ($_can(['admin','manager','accountant','feed_worker','veterinarian'])): ?>
+            <div class="nav-acc<?= $_acc(['inv_feed','inv_medicine','inv_equipment','inv_reports']) ?>" id="nacc-inv">
+                <button class="nav-acc-hdr" onclick="toggleAcc('nacc-inv')">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                    Inventory
+                    <span class="nav-acc-chv">›</span>
+                </button>
+                <div class="nav-acc-body">
+                    <?php if ($_module_enabled('feed_medicine') && $_can(['admin','manager','accountant','feed_worker'])): ?>
+                    <a href="/modules/inventory/feed.php" class="nav-item<?= $_nav_active('inv_feed') ?>">Feed Stock</a>
+                    <?php endif; ?>
+                    <?php if ($_module_enabled('feed_medicine') && $_can(['admin','manager','accountant','veterinarian'])): ?>
+                    <a href="/modules/inventory/medicine.php" class="nav-item<?= $_nav_active('inv_medicine') ?>">Medicine Stock</a>
+                    <?php endif; ?>
+                    <?php if ($_module_enabled('equipment') && $_can(['admin','manager','accountant'])): ?>
+                    <a href="/modules/inventory/equipment.php" class="nav-item<?= $_nav_active('inv_equipment') ?>">Equipment &amp; Machinery</a>
+                    <?php endif; ?>
+                    <?php if ($_can(['admin','manager','accountant'])): ?>
+                    <div style="font-size:.65rem;color:rgba(255,255,255,.3);padding:.4rem .75rem .1rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Reports</div>
+                    <a href="/modules/inventory/reports.php" class="nav-item<?= $_nav_active('inv_reports') ?>">Inventory Reports</a>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- ══════════════════════════════════════════════════
                  💰  BUSINESS
                  ══════════════════════════════════════════════════ -->
             <?php if ($_module_enabled('sales') && $_can(['admin','manager','accountant'])): ?>

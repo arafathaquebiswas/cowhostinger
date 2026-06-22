@@ -16,10 +16,19 @@ if (!$is_edit && !canAccess('equipment.create')) {
     redirect('/modules/equipment/index.php');
 }
 
+// Inline migration: ensure quantity column exists
+$eq_cols = array_column($db->query("SHOW COLUMNS FROM equipment")->fetchAll(), 'Field');
+if (!in_array('quantity', $eq_cols))
+    $db->exec("ALTER TABLE equipment ADD COLUMN quantity INT UNSIGNED NOT NULL DEFAULT 1 AFTER serial_number");
+if (!in_array('serial_number', $eq_cols))
+    $db->exec("ALTER TABLE equipment ADD COLUMN serial_number VARCHAR(100) DEFAULT NULL AFTER name");
+
 $errors = [];
 $form = [
     'name'                  => '',
+    'serial_number'         => '',
     'category'              => '',
+    'quantity'              => '1',
     'purchase_date'         => '',
     'purchase_price'        => '',
     'acquisition_type'      => 'purchased',
@@ -42,7 +51,9 @@ if ($is_edit) {
     }
     $form = array_merge($form, [
         'name'                  => $existing['name'],
+        'serial_number'         => $existing['serial_number']         ?? '',
         'category'              => $existing['category']              ?? '',
+        'quantity'              => (string)($existing['quantity']      ?? 1),
         'purchase_date'         => $existing['purchase_date']         ?? '',
         'purchase_price'        => $existing['purchase_price']        ?? '',
         'acquisition_type'      => $existing['acquisition_type']      ?? 'purchased',
@@ -63,7 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $form['name']                  = sanitize($_POST['name']                  ?? '');
+    $form['serial_number']         = sanitize($_POST['serial_number']         ?? '');
     $form['category']              = sanitize($_POST['category']              ?? '');
+    $form['quantity']              = trim($_POST['quantity']                   ?? '1');
     $form['purchase_date']         = trim($_POST['purchase_date']             ?? '');
     $form['purchase_price']        = trim($_POST['purchase_price']            ?? '');
     $form['acquisition_type']      = sanitize($_POST['acquisition_type']      ?? 'purchased');
@@ -77,6 +90,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validation
     if ($form['name'] === '') $errors[] = 'Equipment name is required.';
     if (strlen($form['name']) > 150) $errors[] = 'Name is too long.';
+
+    $qty_val = (int)$form['quantity'];
+    if ($qty_val < 1) $errors[] = 'Quantity must be at least 1.';
+    if ($qty_val > 100000) $errors[] = 'Quantity cannot exceed 100,000.';
 
     $valid_statuses = ['operational', 'maintenance', 'damaged', 'sold', 'disposed'];
     if (!in_array($form['status'], $valid_statuses, true)) $errors[] = 'Invalid status.';
@@ -108,21 +125,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (empty($errors)) {
-        $user_id   = (int)$_SESSION['user_id'];
-        $pdate     = $form['purchase_date']         !== '' ? $form['purchase_date']         : null;
-        $lmdate    = $form['last_maintenance_date'] !== '' ? $form['last_maintenance_date'] : null;
-        $notes_val = $form['notes'] !== '' ? $form['notes'] : null;
-
-        $cat_val = $form['category'] !== '' ? $form['category'] : null;
+        $user_id    = (int)$_SESSION['user_id'];
+        $pdate      = $form['purchase_date']         !== '' ? $form['purchase_date']         : null;
+        $lmdate     = $form['last_maintenance_date'] !== '' ? $form['last_maintenance_date'] : null;
+        $notes_val  = $form['notes'] !== '' ? $form['notes'] : null;
+        $cat_val    = $form['category'] !== '' ? $form['category'] : null;
+        $sn_val     = $form['serial_number'] !== '' ? $form['serial_number'] : null;
         $gifted_val = ($form['acquisition_type'] === 'gifted' && $form['gifted_by'] !== '') ? $form['gifted_by'] : null;
 
         if ($is_edit) {
+            // On edit: if qty is changed, update quantity directly (admin responsible for accuracy)
             $db->prepare(
-                "UPDATE equipment SET name=?, category=?, purchase_date=?, purchase_price=?,
+                "UPDATE equipment SET name=?, serial_number=?, category=?, quantity=?, purchase_date=?, purchase_price=?,
                  acquisition_type=?, gifted_by=?, current_value=?, status=?, lifespan_months=?,
                  last_maintenance_date=?, photo_url=?, notes=? WHERE id=? AND " . farmFilter()
             )->execute([
-                $form['name'], $cat_val, $pdate, $purchase_price_val,
+                $form['name'], $sn_val, $cat_val, $qty_val, $pdate, $purchase_price_val,
                 $form['acquisition_type'], $gifted_val, $current_value_val,
                 $form['status'], $lifespan, $lmdate, $photo_url, $notes_val, $eq_id,
             ]);
@@ -130,16 +148,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', "Equipment '{$form['name']}' updated.");
         } else {
             $db->prepare(
-                "INSERT INTO equipment (farm_id, name, category, purchase_date, purchase_price, acquisition_type, gifted_by, current_value, status, lifespan_months, last_maintenance_date, photo_url, notes)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                "INSERT INTO equipment (farm_id, name, serial_number, category, quantity, purchase_date, purchase_price, acquisition_type, gifted_by, current_value, status, lifespan_months, last_maintenance_date, photo_url, notes)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             )->execute([
-                fid(), $form['name'], $cat_val, $pdate, $purchase_price_val,
+                fid(), $form['name'], $sn_val, $cat_val, $qty_val, $pdate, $purchase_price_val,
                 $form['acquisition_type'], $gifted_val, $current_value_val,
                 $form['status'], $lifespan, $lmdate, $photo_url, $notes_val,
             ]);
             $new_id = (int)$db->lastInsertId();
+
+            // Record purchase in finance if price given
+            if ($purchase_price_val > 0) {
+                $total_cost = round($qty_val * $purchase_price_val, 2);
+                $db->prepare("INSERT INTO finance_transactions (farm_id,type,category,amount,related_module,reference_id,transaction_date,recorded_by,notes) VALUES (?,?,?,?,?,?,?,?,?)")
+                   ->execute([fid(), 'expense', 'Equipment Purchase', $total_cost, 'equipment', $new_id, $pdate ?? date('Y-m-d'), $user_id, "{$qty_val}× {$form['name']} @ " . number_format($purchase_price_val, 2) . " each"]);
+            }
+
             auditLog($user_id, 'CREATE_EQUIPMENT', 'equipment', $new_id, null, $form);
-            flashMessage('success', "Equipment '{$form['name']}' added.");
+            flashMessage('success', "Equipment '{$form['name']}'" . ($qty_val > 1 ? " (×{$qty_val})" : '') . " added.");
         }
         redirect('/modules/equipment/index.php');
     }
@@ -182,16 +208,28 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
       enctype="multipart/form-data" novalidate>
     <?= csrfField() ?>
 
-    <div class="card" style="margin-bottom:1.25rem;max-width:640px">
+    <div class="card" style="margin-bottom:1.25rem;max-width:680px">
         <div class="card-body">
-            <div class="form-group">
-                <label class="form-label" for="name">Equipment Name <span style="color:var(--danger)">*</span></label>
-                <input type="text" id="name" name="name" class="form-control"
-                       value="<?= e($form['name']) ?>" maxlength="150"
-                       placeholder="e.g. Milking Machine #1, Feed Mixer" required>
+
+            <!-- Name + Serial -->
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <label class="form-label" for="name">Equipment Name <span style="color:var(--danger)">*</span></label>
+                    <input type="text" id="name" name="name" class="form-control"
+                           value="<?= e($form['name']) ?>" maxlength="150"
+                           placeholder="e.g. Feed Bucket, Milking Machine, Generator" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="serial_number">Serial Number</label>
+                    <input type="text" id="serial_number" name="serial_number" class="form-control"
+                           value="<?= e($form['serial_number'] ?? '') ?>" maxlength="100"
+                           placeholder="Optional">
+                    <span class="form-hint">For individual/unique items.</span>
+                </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+            <!-- Category + Quantity + Acquisition -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
                 <div class="form-group">
                     <label class="form-label" for="category">Category</label>
                     <select id="category" name="category" class="form-control">
@@ -200,6 +238,12 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         <option value="<?= e($cat) ?>" <?= $form['category'] === $cat ? 'selected' : '' ?>><?= e($cat) ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="quantity">Quantity <span style="color:var(--danger)">*</span></label>
+                    <input type="number" id="quantity" name="quantity" class="form-control"
+                           value="<?= e($form['quantity']) ?>" min="1" max="100000" required>
+                    <span class="form-hint">Use 1 for unique items (tractor, generator).</span>
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="acquisition_type">Acquisition Type</label>
@@ -217,17 +261,20 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                        value="<?= e($form['gifted_by']) ?>" maxlength="150" placeholder="Name of donor or organisation">
             </div>
 
+            <!-- Pricing per unit -->
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
                 <div class="form-group">
-                    <label class="form-label" for="purchase_price">Purchase Price (৳)</label>
+                    <label class="form-label" for="purchase_price">Purchase Price / Unit (৳)</label>
                     <input type="number" id="purchase_price" name="purchase_price" class="form-control"
-                           value="<?= e($form['purchase_price'] ?? '') ?>" step="0.01" min="0" placeholder="0.00">
+                           value="<?= e($form['purchase_price'] ?? '') ?>" step="0.01" min="0" placeholder="0.00"
+                           oninput="calcTotals()">
                 </div>
                 <div class="form-group">
-                    <label class="form-label" for="current_value">Current Value (৳)</label>
+                    <label class="form-label" for="current_value">Current Value / Unit (৳)</label>
                     <input type="number" id="current_value" name="current_value" class="form-control"
-                           value="<?= e($form['current_value'] ?? '') ?>" step="0.01" min="0" placeholder="0.00">
-                    <span class="form-hint">Estimated present worth.</span>
+                           value="<?= e($form['current_value'] ?? '') ?>" step="0.01" min="0" placeholder="0.00"
+                           oninput="calcTotals()">
+                    <span class="form-hint">Estimated present worth per unit.</span>
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="status">Status</label>
@@ -236,6 +283,14 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                         <option value="<?= $val ?>" <?= $form['status'] === $val ? 'selected' : '' ?>><?= $label ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+            </div>
+
+            <!-- Cost summary (auto-calculated) -->
+            <div id="cost_summary" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;font-size:.875rem;display:none">
+                <div style="display:flex;gap:2rem;flex-wrap:wrap">
+                    <span>Total Purchase Value: <strong id="total_purchase" style="color:#166534">—</strong></span>
+                    <span>Total Current Value: <strong id="total_current" style="color:#0369a1">—</strong></span>
                 </div>
             </div>
 
@@ -276,9 +331,16 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <div class="form-group">
                     <label class="form-label" for="notes">Notes</label>
                     <textarea id="notes" name="notes" class="form-control" rows="5"
-                              placeholder="Model number, serial, location…"><?= e($form['notes'] ?? '') ?></textarea>
+                              placeholder="Model number, location, condition details…"><?= e($form['notes'] ?? '') ?></textarea>
                 </div>
             </div>
+
+            <?php if ($is_edit && (int)($existing['quantity'] ?? 1) > 1): ?>
+            <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:.65rem 1rem;font-size:.84rem;color:#92400e">
+                <strong>Note:</strong> Current stock: <strong><?= (int)$existing['quantity'] ?></strong> units.
+                Editing quantity here directly adjusts the stock level — use the Sell page to record sales and reduce stock properly.
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -297,17 +359,32 @@ function toggleGiftedBy(val) {
     var row = document.getElementById('gifted_by_row');
     if (row) row.style.display = val === 'gifted' ? 'block' : 'none';
 }
+function calcTotals() {
+    var qty = parseInt(document.getElementById('quantity').value) || 0;
+    var pp  = parseFloat(document.getElementById('purchase_price').value) || 0;
+    var cv  = parseFloat(document.getElementById('current_value').value) || 0;
+    var box = document.getElementById('cost_summary');
+    var tp  = document.getElementById('total_purchase');
+    var tc  = document.getElementById('total_current');
+    if (qty > 1 && (pp > 0 || cv > 0)) {
+        box.style.display = 'block';
+        tp.textContent = pp > 0 ? '৳' + (qty * pp).toLocaleString('en-BD', {minimumFractionDigits:2}) : '—';
+        tc.textContent = cv > 0 ? '৳' + (qty * cv).toLocaleString('en-BD', {minimumFractionDigits:2}) : '—';
+    } else {
+        box.style.display = 'none';
+    }
+}
+document.getElementById('quantity').addEventListener('input', calcTotals);
 document.getElementById('photo').addEventListener('change', function() {
     var file = this.files[0];
     if (!file) return;
     var preview = document.getElementById('newPhotoPreview');
     var reader  = new FileReader();
-    reader.onload = function(e) {
-        preview.src = e.target.result;
-        preview.style.display = 'block';
-    };
+    reader.onload = function(e) { preview.src = e.target.result; preview.style.display = 'block'; };
     reader.readAsDataURL(file);
 });
+// Trigger on load for edit mode
+calcTotals();
 JS;
 require_once dirname(__DIR__, 2) . '/includes/layout_footer.php';
 ?>

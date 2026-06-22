@@ -87,9 +87,14 @@ $count_stmt->execute($params);
 $total = (int)$count_stmt->fetchColumn();
 $pager = paginate($total, $per_page, $page);
 
+// Inline migration: ensure quantity column exists
+$eq_cols = array_column($db->query("SHOW COLUMNS FROM equipment")->fetchAll(), 'Field');
+if (!in_array('quantity', $eq_cols)) $db->exec("ALTER TABLE equipment ADD COLUMN quantity INT UNSIGNED NOT NULL DEFAULT 1 AFTER serial_number");
+
 $fetch_params = array_merge($params, [$per_page, $pager['offset']]);
 $stmt = $db->prepare(
-    "SELECT id, name, purchase_date, status, lifespan_months, last_maintenance_date, photo_url, notes
+    "SELECT id, name, category, serial_number, quantity, purchase_price, current_value,
+            purchase_date, status, lifespan_months, last_maintenance_date, photo_url, notes
      FROM equipment
      WHERE {$where_sql}
      ORDER BY FIELD(status,'damaged','maintenance','operational'), name ASC
@@ -98,12 +103,25 @@ $stmt = $db->prepare(
 $stmt->execute($fetch_params);
 $equipment = $stmt->fetchAll();
 
-// Status counts
-$sc_stmt = $db->prepare("SELECT status, COUNT(*) AS cnt FROM equipment WHERE " . farmFilter() . " GROUP BY status");
+// Status counts + asset totals
+$sc_stmt = $db->prepare(
+    "SELECT status, COUNT(*) AS cnt, SUM(quantity) AS total_units,
+            SUM(quantity * COALESCE(purchase_price,0)) AS total_cost,
+            SUM(quantity * COALESCE(current_value,0)) AS total_current
+     FROM equipment WHERE " . farmFilter() . " GROUP BY status"
+);
 $sc_stmt->execute();
 $sc_rows = $sc_stmt->fetchAll();
-$status_counts = [];
-foreach ($sc_rows as $r) $status_counts[$r['status']] = (int)$r['cnt'];
+$status_counts    = [];
+$total_cost_val   = 0.0;
+$total_cur_val    = 0.0;
+$total_op_units   = 0;
+foreach ($sc_rows as $r) {
+    $status_counts[$r['status']] = (int)$r['cnt'];
+    $total_cost_val += (float)$r['total_cost'];
+    $total_cur_val  += (float)$r['total_current'];
+    if ($r['status'] === 'operational') $total_op_units = (int)$r['total_units'];
+}
 $total_all_stmt = $db->prepare("SELECT COUNT(*) FROM equipment WHERE " . farmFilter());
 $total_all_stmt->execute();
 $total_all = (int)$total_all_stmt->fetchColumn();
@@ -194,10 +212,13 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
 </div>
 
 <!-- Summary KPIs -->
-<div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin-bottom:1.25rem">
+<div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(145px,1fr));margin-bottom:1.25rem">
     <div class="kpi-card" style="--kpi-color:#16A34A;--kpi-soft:#F0FDF4">
         <div class="kpi-label">Operational</div>
         <div class="kpi-value"><?= $status_counts['operational'] ?? 0 ?></div>
+        <?php if ($total_op_units > ($status_counts['operational'] ?? 0)): ?>
+        <div style="font-size:.75rem;color:#16A34A;margin-top:.2rem"><?= $total_op_units ?> total units</div>
+        <?php endif; ?>
     </div>
     <div class="kpi-card" style="--kpi-color:#D97706;--kpi-soft:#FFFBEB">
         <div class="kpi-label">In Maintenance</div>
@@ -207,6 +228,18 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
         <div class="kpi-label">Damaged</div>
         <div class="kpi-value"><?= $status_counts['damaged'] ?? 0 ?></div>
     </div>
+    <?php if ($total_cost_val > 0): ?>
+    <div class="kpi-card" style="--kpi-color:#7C3AED;--kpi-soft:#F5F3FF">
+        <div class="kpi-label">Total Cost</div>
+        <div class="kpi-value" style="font-size:1rem">৳<?= number_format($total_cost_val, 0) ?></div>
+    </div>
+    <?php endif; ?>
+    <?php if ($total_cur_val > 0): ?>
+    <div class="kpi-card" style="--kpi-color:#0891B2;--kpi-soft:#ECFEFF">
+        <div class="kpi-label">Current Value</div>
+        <div class="kpi-value" style="font-size:1rem">৳<?= number_format($total_cur_val, 0) ?></div>
+    </div>
+    <?php endif; ?>
     <?php if (($status_counts['sold'] ?? 0) > 0): ?>
     <div class="kpi-card" style="--kpi-color:#2563EB;--kpi-soft:#EFF6FF">
         <div class="kpi-label">Sold</div>
@@ -298,15 +331,23 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <tr>
                 <th>Equipment</th>
                 <th>Status</th>
+                <th style="text-align:right">Qty</th>
+                <th style="text-align:right">Unit Price</th>
+                <th style="text-align:right">Total Value</th>
                 <th>Purchase Date</th>
                 <th>Last Maintenance</th>
-                <th>Lifespan</th>
                 <?php if (hasRole(['admin', 'manager'])): ?><th style="width:160px">Actions</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
         <?php foreach ($equipment as $eq):
             $maint_badge = maintenance_warning($eq['last_maintenance_date'], $eq['lifespan_months']);
+            $qty         = (int)($eq['quantity'] ?? 1);
+            $unit_pp     = (float)($eq['purchase_price']  ?? 0);
+            $unit_cv     = (float)($eq['current_value']   ?? 0);
+            $total_pp    = round($qty * $unit_pp, 2);
+            $total_cv    = round($qty * $unit_cv, 2);
+            $display_val = $unit_cv > 0 ? $total_cv : $total_pp;
         ?>
         <tr>
             <td>
@@ -319,7 +360,9 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <?php endif; ?>
                     <div>
                         <div style="font-weight:600"><?= e($eq['name']) ?></div>
-                        <?php if ($eq['notes']): ?>
+                        <?php if ($eq['category'] ?? ''): ?>
+                        <div class="text-muted" style="font-size:.78rem"><?= e($eq['category']) ?></div>
+                        <?php elseif ($eq['notes']): ?>
                         <div class="text-muted" style="font-size:.79rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= e($eq['notes']) ?></div>
                         <?php endif; ?>
                     </div>
@@ -331,9 +374,19 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 </span>
                 <?= $maint_badge ?>
             </td>
+            <td style="text-align:right;font-weight:<?= $qty > 1 ? '600' : 'normal' ?>"><?= $qty ?></td>
+            <td style="text-align:right">
+                <?php if ($unit_cv > 0): ?>
+                <span title="Current value/unit">৳<?= number_format($unit_cv, 2) ?></span>
+                <?php elseif ($unit_pp > 0): ?>
+                <span class="text-muted" title="Purchase price/unit">৳<?= number_format($unit_pp, 2) ?></span>
+                <?php else: ?>—<?php endif; ?>
+            </td>
+            <td style="text-align:right">
+                <?= $display_val > 0 ? '৳' . number_format($display_val, 2) : '—' ?>
+            </td>
             <td><?= $eq['purchase_date'] ? e(formatDate($eq['purchase_date'])) : '—' ?></td>
             <td><?= $eq['last_maintenance_date'] ? e(formatDate($eq['last_maintenance_date'])) : '—' ?></td>
-            <td><?= $eq['lifespan_months'] ? e($eq['lifespan_months']) . ' mo' : '—' ?></td>
             <?php if (hasRole(['admin', 'manager'])): ?>
             <td>
                 <div style="display:flex;gap:.35rem;flex-wrap:wrap">
@@ -347,10 +400,10 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                     <a href="/modules/equipment/log_cost.php?id=<?= $eq['id'] ?>"
                        class="btn btn-sm btn-warning" title="Log Maintenance / Repair Cost">৳</a>
 
-                    <?php if ($eq['status'] !== 'sold'): ?>
+                    <?php if ($eq['status'] !== 'sold' && $qty > 0): ?>
                     <!-- Sell -->
                     <a href="/modules/equipment/sell.php?id=<?= $eq['id'] ?>"
-                       class="btn btn-sm btn-secondary" title="Record Sale"
+                       class="btn btn-sm btn-secondary" title="<?= $qty > 1 ? 'Sell (stock: '.$qty.')' : 'Record Sale' ?>"
                        style="background:#EFF6FF;color:#2563EB;border-color:#BFDBFE">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
                     </a>
