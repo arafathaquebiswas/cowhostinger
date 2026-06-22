@@ -141,52 +141,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status = $cow['status'];
         $notes  = $cow['notes'] !== '' ? $cow['notes'] : null;
 
-        if ($is_edit) {
-            $upd = $db->prepare(
-                "UPDATE cows
-                 SET tag_number=?, breed=?, birth_date=?, purchase_price=?,
-                     purchase_date=?, current_weight=?, health_status=?,
-                     is_pregnant=?, status=?, photo_url=?, notes=?
-                 WHERE id=?"
-            );
-            $upd->execute([$tag, $breed, $bdate, $price, $pdate, $weight, $health, $preg, $status, $photo_url, $notes, $cow_id]);
+        try {
+            if ($is_edit) {
+                $upd = $db->prepare(
+                    "UPDATE cows
+                     SET tag_number=?, breed=?, birth_date=?, purchase_price=?,
+                         purchase_date=?, current_weight=?, health_status=?,
+                         is_pregnant=?, status=?, photo_url=?, notes=?
+                     WHERE id=?"
+                );
+                $upd->execute([$tag, $breed, $bdate, $price, $pdate, $weight, $health, $preg, $status, $photo_url, $notes, $cow_id]);
 
-            // Auto-log weight if it changed
-            $prev_weight = $existing['current_weight'] !== null ? (float)$existing['current_weight'] : null;
-            if ($weight !== null && $weight !== $prev_weight) {
-                $db->prepare(
-                    "INSERT INTO cow_weight_logs (farm_id, cow_id, weight, recorded_by) VALUES (?,?,?,?)"
-                )->execute([fid(), $cow_id, $weight, $user_id]);
+                // Auto-log weight if it changed
+                $prev_weight = $existing['current_weight'] !== null ? (float)$existing['current_weight'] : null;
+                if ($weight !== null && $weight !== $prev_weight) {
+                    $db->prepare(
+                        "INSERT INTO cow_weight_logs (farm_id, cow_id, weight, recorded_by) VALUES (?,?,?,?)"
+                    )->execute([fid(), $cow_id, $weight, $user_id]);
+                }
+
+                auditLog($user_id, 'UPDATE_COW', 'cows', $cow_id, $existing, array_merge($cow, ['photo_url' => $photo_url]));
+                flashMessage('success', "Cow #{$tag} updated successfully.");
+                redirect("/modules/cows/view.php?id={$cow_id}");
+            } else {
+                // Subscription limit re-check at INSERT time
+                if (!canAccess('cow.create')) {
+                    $lim = resourceUsage('cows');
+                    flashMessage('error', "Your plan allows a maximum of {$lim['max']} active cows. Please upgrade to add more.");
+                    redirect('/modules/cows/index.php');
+                }
+                $ins = $db->prepare(
+                    "INSERT INTO cows
+                         (farm_id, tag_number, breed, birth_date, purchase_price, purchase_date,
+                          current_weight, health_status, is_pregnant, status, photo_url, notes)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+                );
+                $ins->execute([fid(), $tag, $breed, $bdate, $price, $pdate, $weight, $health, $preg, $status, $photo_url, $notes]);
+                $new_id = (int)$db->lastInsertId();
+
+                if ($weight !== null) {
+                    $db->prepare(
+                        "INSERT INTO cow_weight_logs (farm_id, cow_id, weight, recorded_by) VALUES (?,?,?,?)"
+                    )->execute([fid(), $new_id, $weight, $user_id]);
+                }
+
+                auditLog($user_id, 'CREATE_COW', 'cows', $new_id, null, $cow);
+                flashMessage('success', "Cow #{$tag} added successfully.");
+                redirect("/modules/cows/view.php?id={$new_id}");
             }
-
-            auditLog($user_id, 'UPDATE_COW', 'cows', $cow_id, $existing, array_merge($cow, ['photo_url' => $photo_url]));
-            flashMessage('success', "Cow #{$tag} updated successfully.");
-            redirect("/modules/cows/view.php?id={$cow_id}");
-        } else {
-            // Subscription limit re-check at INSERT time
-            if (!canAccess('cow.create')) {
-                $lim = resourceUsage('cows');
-                flashMessage('error', "Your plan allows a maximum of {$lim['max']} active cows. Please upgrade to add more.");
-                redirect('/modules/cows/index.php');
+        } catch (PDOException $e) {
+            if ($e->getCode() === '23000') {
+                $errors[] = "Tag number '{$tag}' is already in use on your farm. Please choose a different tag number.";
+            } else {
+                error_log('[cow_form] ' . $e->getMessage());
+                $errors[] = 'A database error occurred. Please try again.';
             }
-            $ins = $db->prepare(
-                "INSERT INTO cows
-                     (farm_id, tag_number, breed, birth_date, purchase_price, purchase_date,
-                      current_weight, health_status, is_pregnant, status, photo_url, notes)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
-            );
-            $ins->execute([fid(), $tag, $breed, $bdate, $price, $pdate, $weight, $health, $preg, $status, $photo_url, $notes]);
-            $new_id = (int)$db->lastInsertId();
-
-            if ($weight !== null) {
-                $db->prepare(
-                    "INSERT INTO cow_weight_logs (farm_id, cow_id, weight, recorded_by) VALUES (?,?,?,?)"
-                )->execute([fid(), $new_id, $weight, $user_id]);
-            }
-
-            auditLog($user_id, 'CREATE_COW', 'cows', $new_id, null, $cow);
-            flashMessage('success', "Cow #{$tag} added successfully.");
-            redirect("/modules/cows/view.php?id={$new_id}");
         }
     }
 }

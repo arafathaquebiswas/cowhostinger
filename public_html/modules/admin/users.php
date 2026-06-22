@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = $_POST['password'] ?? '';
         $confirm  = $_POST['confirm']  ?? '';
 
-        $allowed_roles    = ['admin','manager','accountant','veterinarian','milkman','worker'];
+        $allowed_roles    = ['admin','manager','accountant','veterinarian','milkman','feed_worker','worker'];
         $allowed_statuses = ['active','inactive'];
 
         if ($name === '')                                    $errors[] = 'Name is required.';
@@ -165,6 +165,7 @@ $role_labels = [
     'accountant'   => 'Accountant',
     'veterinarian' => 'Veterinarian',
     'milkman'      => 'Milkman / Dairy Handler',
+    'feed_worker'  => 'Feed Worker',
     'worker'       => 'Worker',
 ];
 

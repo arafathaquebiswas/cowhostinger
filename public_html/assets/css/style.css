@@ -1080,6 +1080,7 @@ tbody tr:hover { background: rgba(45,106,79,.03); }
 .role-accountant   { background: #DBEAFE; color: #1E40AF; }
 .role-veterinarian { background: #FEF3C7; color: #92400E; }
 .role-milkman      { background: #E0F2FE; color: #075985; }
+.role-feed_worker  { background: #FEF9C3; color: #713F12; }
 .role-worker       { background: #F0FDF4; color: #166534; }
 
 /* User avatar in table */
