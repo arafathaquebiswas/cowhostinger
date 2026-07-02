@@ -264,7 +264,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
                 <div style="font-size:.8rem;color:#6B7280;margin-bottom:.8rem">
                     <?= $plan['is_suspended'] ? 'Account suspended. Contact support.' : 'Subscription expired.' ?>
                 </div>
-                <a href="mailto:support@abit.com.bd" class="btn btn-sm btn-danger">Contact Support</a>
+                <a href="mailto:arafathaquebiswas@gmail.com" class="btn btn-sm btn-danger">Contact Support</a>
             </div>
             <?php endif; ?>
         </div>
@@ -384,7 +384,7 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
             <div style="font-weight:700;color:#4C1D95;margin-bottom:.2rem">Need help? Contact AB IT</div>
             <div style="font-size:.85rem;color:#6B7280">
                 WhatsApp / Call: <strong>01316816333</strong> &nbsp;·&nbsp;
-                Email: <strong>support@abit.com.bd</strong> &nbsp;·&nbsp;
+                Email: <strong>arafathaquebiswas@gmail.com</strong> &nbsp;·&nbsp;
                 We accept bKash, Nagad, Rocket &amp; Bank Transfer
             </div>
         </div>

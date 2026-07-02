@@ -22,17 +22,12 @@ function computePeriodFinancials(PDO $db, string $from, string $to): array {
     $ff = farmFilter();
 
     // ── INCOME ──────────────────────────────────────────────────────────────
-    // Milk: in milk_records (production value, NOT in finance_transactions)
-    $q = $db->prepare(
-        "SELECT COALESCE(SUM(milk_value),0) FROM milk_records
-         WHERE {$ff} AND contamination_flag=0 AND DATE(recorded_at) BETWEEN ? AND ?"
-    );
-    $q->execute([$from,$to]);
-    $rev_milk = (float)$q->fetchColumn();
-
-    // All other income from finance_transactions — one query, CASE breakdown
+    // Single source of truth: finance_transactions for all income.
+    // Milk Sales are recorded there via milk/sales.php — do NOT also read
+    // milk_records.milk_value here, as that would double-count milk revenue.
     $q = $db->prepare(
         "SELECT
+            SUM(CASE WHEN category='Milk Sales'     THEN amount ELSE 0 END) AS rev_milk,
             SUM(CASE WHEN category='Cow Sales'      THEN amount ELSE 0 END) AS rev_cow,
             SUM(CASE WHEN category='Meat Sales'     THEN amount ELSE 0 END) AS rev_meat,
             SUM(CASE WHEN category='Byproduct Sales'THEN amount ELSE 0 END) AS rev_byproduct,
@@ -46,6 +41,7 @@ function computePeriodFinancials(PDO $db, string $from, string $to): array {
     $q->execute([$from,$to]);
     $inc = $q->fetch();
 
+    $rev_milk      = (float)($inc['rev_milk']      ?? 0);
     $rev_cow       = (float)($inc['rev_cow']       ?? 0);
     $rev_meat      = (float)($inc['rev_meat']      ?? 0);
     $rev_byproduct = (float)($inc['rev_byproduct'] ?? 0);
@@ -53,22 +49,25 @@ function computePeriodFinancials(PDO $db, string $from, string $to): array {
     $rev_medicine  = (float)($inc['rev_medicine']  ?? 0);
     $rev_equipment = (float)($inc['rev_equipment'] ?? 0);
     $rev_fin_total = (float)($inc['rev_fin_total'] ?? 0);
-    $rev_other     = max(0, $rev_fin_total - $rev_cow - $rev_meat - $rev_byproduct
+    $rev_other     = max(0, $rev_fin_total - $rev_milk - $rev_cow - $rev_meat - $rev_byproduct
                          - $rev_feed - $rev_medicine - $rev_equipment);
-    $rev_total     = $rev_milk + $rev_fin_total;
+    $rev_total     = $rev_fin_total;
 
     // ── EXPENSES ────────────────────────────────────────────────────────────
+    // Equipment Purchase is a capital expenditure (asset), not an operating expense.
+    // It is tracked separately (exp_equipment / exp_capex) but excluded from exp_total.
     $q = $db->prepare(
         "SELECT
-            SUM(CASE WHEN related_module='feed'                                       THEN amount ELSE 0 END) AS exp_feed,
-            SUM(CASE WHEN related_module='medicine'                                   THEN amount ELSE 0 END) AS exp_medicine,
-            SUM(CASE WHEN related_module='equipment' AND category='Equipment Purchase' THEN amount ELSE 0 END) AS exp_equipment,
-            SUM(CASE WHEN category='Veterinary Treatment'                             THEN amount ELSE 0 END) AS exp_treatment,
-            SUM(CASE WHEN category='Maintenance Cost'                                 THEN amount ELSE 0 END) AS exp_maintenance,
-            SUM(CASE WHEN category='Payroll' OR related_module='payroll'              THEN amount ELSE 0 END) AS exp_payroll,
-            SUM(CASE WHEN category='Cow Death Loss'                                   THEN amount ELSE 0 END) AS exp_cow_death,
-            SUM(CASE WHEN category='Family Transfer'                                  THEN amount ELSE 0 END) AS exp_transfer,
-            SUM(amount) AS exp_fin_total
+            SUM(CASE WHEN related_module='feed'                                                                                         THEN amount ELSE 0 END) AS exp_feed,
+            SUM(CASE WHEN related_module='medicine'                                                                                     THEN amount ELSE 0 END) AS exp_medicine,
+            SUM(CASE WHEN related_module='equipment' AND category='Equipment Purchase'                                                  THEN amount ELSE 0 END) AS exp_equipment,
+            SUM(CASE WHEN category IN ('Veterinary Treatment','Treatment')                                                              THEN amount ELSE 0 END) AS exp_treatment,
+            SUM(CASE WHEN category IN ('Maintenance Cost','Maintenance','Equipment Maintenance','Equipment Repair')                     THEN amount ELSE 0 END) AS exp_maintenance,
+            SUM(CASE WHEN category IN ('Salary','Payroll','Worker Salary') OR related_module='payroll'                                 THEN amount ELSE 0 END) AS exp_payroll,
+            SUM(CASE WHEN category='Cow Death Loss'                                                                                    THEN amount ELSE 0 END) AS exp_cow_death,
+            SUM(CASE WHEN category='Family Transfer'                                                                                   THEN amount ELSE 0 END) AS exp_transfer,
+            SUM(CASE WHEN category != 'Equipment Purchase'                                                                             THEN amount ELSE 0 END) AS exp_opex_total,
+            SUM(amount)                                                                                                                                         AS exp_fin_total
          FROM finance_transactions
          WHERE {$ff} AND type='expense' AND transaction_date BETWEEN ? AND ?"
     );
@@ -77,17 +76,18 @@ function computePeriodFinancials(PDO $db, string $from, string $to): array {
 
     $exp_feed        = (float)($exp['exp_feed']        ?? 0);
     $exp_medicine    = (float)($exp['exp_medicine']    ?? 0);
-    $exp_equipment   = (float)($exp['exp_equipment']   ?? 0);
+    $exp_equipment   = (float)($exp['exp_equipment']   ?? 0); // CAPEX — tracked but excluded from net profit
     $exp_treatment   = (float)($exp['exp_treatment']   ?? 0);
     $exp_maintenance = (float)($exp['exp_maintenance'] ?? 0);
     $exp_payroll     = (float)($exp['exp_payroll']     ?? 0);
     $exp_cow_death   = (float)($exp['exp_cow_death']   ?? 0);
     $exp_transfer    = (float)($exp['exp_transfer']    ?? 0);
     $exp_fin_total   = (float)($exp['exp_fin_total']   ?? 0);
-    $exp_misc        = max(0, $exp_fin_total - $exp_feed - $exp_medicine - $exp_equipment
+    $exp_opex_total  = (float)($exp['exp_opex_total']  ?? 0); // total excluding Equipment Purchase
+    $exp_misc        = max(0, $exp_opex_total - $exp_feed - $exp_medicine
                          - $exp_treatment - $exp_maintenance - $exp_payroll
                          - $exp_cow_death - $exp_transfer);
-    $exp_total       = $exp_fin_total;
+    $exp_total       = $exp_opex_total; // P&L total excludes Equipment Purchase (CAPEX)
 
     // ── MODULE NET MARGINS ───────────────────────────────────────────────────
     // Feed: sales revenue minus purchase cost
@@ -108,11 +108,11 @@ function computePeriodFinancials(PDO $db, string $from, string $to): array {
         'rev_milk','rev_cow','rev_meat','rev_byproduct',
         'rev_feed','rev_medicine','rev_equipment','rev_other',
         'rev_fin_total','rev_total',
-        // Expense
+        // Expense — exp_total excludes Equipment Purchase (CAPEX); exp_fin_total includes it
         'exp_feed','exp_medicine','exp_equipment',
         'exp_treatment','exp_maintenance','exp_payroll',
         'exp_cow_death','exp_transfer','exp_misc',
-        'exp_fin_total','exp_total',
+        'exp_opex_total','exp_fin_total','exp_total',
         // Module margins
         'net_feed','net_medicine','net_equipment','net_livestock',
         // Summary
@@ -159,19 +159,7 @@ function buildTrend(PDO $db): array {
     $min = $months[0]['from']; $max = $months[11]['to'];
     $ff  = farmFilter();
 
-    // Milk income by month
-    $q = $db->prepare(
-        "SELECT YEAR(DATE(recorded_at)) yr, MONTH(DATE(recorded_at)) mo, SUM(milk_value) total
-         FROM milk_records WHERE {$ff} AND contamination_flag=0 AND DATE(recorded_at) BETWEEN ? AND ?
-         GROUP BY yr,mo"
-    );
-    $q->execute([$min,$max]);
-    foreach ($q->fetchAll() as $r) {
-        $i = $idx[(int)$r['yr']][(int)$r['mo']] ?? null;
-        if ($i !== null) $months[$i]['rev'] += (float)$r['total'];
-    }
-
-    // All other income from finance_transactions by month
+    // Income by month — finance_transactions is single source of truth (includes Milk Sales)
     $q = $db->prepare(
         "SELECT YEAR(transaction_date) yr, MONTH(transaction_date) mo, SUM(amount) total
          FROM finance_transactions WHERE {$ff} AND type='income' AND transaction_date BETWEEN ? AND ?
@@ -183,10 +171,10 @@ function buildTrend(PDO $db): array {
         if ($i !== null) $months[$i]['rev'] += (float)$r['total'];
     }
 
-    // All expenses from finance_transactions by month
+    // Operating expenses by month — Equipment Purchase excluded (capital asset, not OPEX)
     $q = $db->prepare(
         "SELECT YEAR(transaction_date) yr, MONTH(transaction_date) mo, SUM(amount) total
-         FROM finance_transactions WHERE {$ff} AND type='expense' AND transaction_date BETWEEN ? AND ?
+         FROM finance_transactions WHERE {$ff} AND type='expense' AND category != 'Equipment Purchase' AND transaction_date BETWEEN ? AND ?
          GROUP BY yr,mo"
     );
     $q->execute([$min,$max]);
@@ -325,6 +313,7 @@ $exp_cats = [
     'Payroll'         => $fp['tm']['exp_payroll'],
     'Maintenance'     => $fp['tm']['exp_maintenance'],
     'Misc'            => $fp['tm']['exp_misc'],
+    // Equipment Purchase excluded — it is CAPEX, not an operating expense
 ];
 if ($fp['tm']['exp_total'] > 0 && max($exp_cats) > 0) {
     $max_cat = (string)array_search(max($exp_cats),$exp_cats);
@@ -554,10 +543,10 @@ function pl_bar(float $v, float $max_v, string $color): string {
         </div>
         <div class="card-body" style="padding:.6rem 1rem">
         <?php
+        // Operating expenses only — Equipment Purchase is CAPEX (shown separately below)
         $exp_items = [
             ['🌾 Feed Purchase',      $tm['exp_feed'],        '#65a30d', '/modules/inventory/feed.php'],
             ['💊 Medicine Purchase',  $tm['exp_medicine'],    '#0891b2', '/modules/inventory/medicine.php'],
-            ['🔧 Equipment Purchase', $tm['exp_equipment'],   '#6366f1', '/modules/equipment/index.php'],
             ['👷 Payroll / Salary',   $tm['exp_payroll'],     '#d97706', '/modules/payroll/index.php'],
             ['🩺 Vet Treatments',     $tm['exp_treatment'],   '#7c3aed', '/modules/treatments/index.php'],
             ['🛠️ Maintenance',        $tm['exp_maintenance'], '#6b7280', '/modules/maintenance/index.php'],
@@ -579,6 +568,16 @@ function pl_bar(float $v, float $max_v, string $color): string {
             <div style="width:28px;text-align:right;font-size:.73rem;color:var(--text-secondary)"><?= $pct ?>%</div>
         </div>
         <?php endforeach; ?>
+        <?php if ($tm['exp_equipment'] > 0): ?>
+        <div style="display:flex;align-items:center;gap:.6rem;padding:.28rem 0;border-top:2px dashed var(--border);margin-top:.25rem">
+            <div style="width:150px;font-size:.8rem;flex-shrink:0">
+                <a href="/modules/equipment/index.php" style="color:#6366f1">⚙️ Equipment CAPEX</a>
+            </div>
+            <?= pl_bar($tm['exp_equipment'],$max_exp,'#6366f1') ?>
+            <div style="width:72px;text-align:right;font-weight:600;color:#6366f1;font-size:.83rem"><?= fmt($tm['exp_equipment']) ?></div>
+            <div style="width:28px;text-align:right;font-size:.73rem;color:#6366f1" title="Capital expenditure — excluded from P&L">CAPEX</div>
+        </div>
+        <?php endif; ?>
         <?php if ($tm['exp_total'] <= 0): ?>
         <p class="text-muted text-sm" style="padding:.5rem 0">No expenses recorded this month.</p>
         <?php endif; ?>
@@ -911,7 +910,7 @@ function pl_bar(float $v, float $max_v, string $color): string {
             <?php
             $cmp_metrics = [
                 ['INCOME',                  null,                 false, '#1e40af', true],
-                ['  Milk Production',        'rev_milk',           false, '#0284c7', false],
+                ['  Milk Sales',             'rev_milk',           false, '#0284c7', false],
                 ['  Cow Sales',              'rev_cow',            false, '#16a34a', false],
                 ['  Meat Sales',             'rev_meat',           false, '#92400e', false],
                 ['  Byproducts',             'rev_byproduct',      false, '#7c3aed', false],
@@ -920,17 +919,17 @@ function pl_bar(float $v, float $max_v, string $color): string {
                 ['  Equipment Sales',        'rev_equipment',      false, '#6366f1', false],
                 ['  Other Income',           'rev_other',          false, '#6b7280', false],
                 ['Total Revenue',            'rev_total',          false, '#15803d', true],
-                ['EXPENSES',                 null,                 true,  '#991b1b', true],
+                ['OPERATING EXPENSES',       null,                 true,  '#991b1b', true],
                 ['  Feed Purchase',          'exp_feed',           true,  '#65a30d', false],
                 ['  Medicine Purchase',      'exp_medicine',       true,  '#0891b2', false],
-                ['  Equipment Purchase',     'exp_equipment',      true,  '#6366f1', false],
                 ['  Payroll / Salary',       'exp_payroll',        true,  '#d97706', false],
                 ['  Vet Treatments',         'exp_treatment',      true,  '#7c3aed', false],
                 ['  Maintenance',            'exp_maintenance',    true,  '#6b7280', false],
                 ['  Cow Death Losses',       'exp_cow_death',      true,  '#dc2626', false],
                 ['  Asset Transfers',        'exp_transfer',       true,  '#f59e0b', false],
                 ['  Farm Operations',        'exp_misc',           true,  '#94a3b8', false],
-                ['Total Expenses',           'exp_total',          true,  '#b91c1c', true],
+                ['Total Op. Expenses',       'exp_total',          true,  '#b91c1c', true],
+                ['CAPEX (Equipment Buy)',     'exp_equipment',      true,  '#6366f1', false],
                 ['NET PROFIT',               'net_profit',         false, '#7c3aed', true],
             ];
             foreach ($cmp_metrics as [$lbl,$key,$inv,$col,$bold]):

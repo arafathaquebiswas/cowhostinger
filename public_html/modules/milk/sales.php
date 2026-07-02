@@ -80,6 +80,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($sale_date === '') $errors[] = 'Sale date is required.';
     if ($pay_stat === 'partial' && $amt_paid <= 0) $errors[] = 'Enter amount paid for partial payment.';
 
+    // Milk stock validation: prevent overselling beyond production for that date
+    if (empty($errors) && $sale_date !== '') {
+        $ps = $db->prepare("SELECT COALESCE(SUM(liters),0) FROM milk_records WHERE farm_id=? AND contamination_flag=0 AND DATE(recorded_at)=?");
+        $ps->execute([fid(), $sale_date]);
+        $produced = (float)$ps->fetchColumn();
+        if ($produced > 0) {
+            $ss = $db->prepare("SELECT COALESCE(SUM(liters_sold),0) FROM milk_sales WHERE farm_id=? AND sale_date=?");
+            $ss->execute([fid(), $sale_date]);
+            $already_sold = (float)$ss->fetchColumn();
+            $available = max(0.0, $produced - $already_sold);
+            if ($liters > $available) {
+                $errors[] = sprintf(
+                    'Insufficient stock for %s: %.2fL available (%.2fL produced − %.2fL already sold).',
+                    date('d M Y', strtotime($sale_date)), $available, $produced, $already_sold
+                );
+            }
+        }
+    }
+
     if (empty($errors)) {
         $amt_paid_final = match($pay_stat) {
             'paid'    => $total,
@@ -133,6 +152,13 @@ $totals = $db->prepare("SELECT COALESCE(SUM(total_amount),0) AS total_rev, COALE
 $totals->execute([fid(), $filter_from, $filter_to]);
 $totals = $totals->fetch();
 
+// Today's available milk stock for the form header
+$tp = $db->prepare("SELECT COALESCE(SUM(liters),0) FROM milk_records WHERE farm_id=? AND contamination_flag=0 AND DATE(recorded_at)=?");
+$tp->execute([fid(), $today]); $stock_produced = (float)$tp->fetchColumn();
+$ts2 = $db->prepare("SELECT COALESCE(SUM(liters_sold),0) FROM milk_sales WHERE farm_id=? AND sale_date=?");
+$ts2->execute([fid(), $today]); $stock_sold = (float)$ts2->fetchColumn();
+$stock_available = max(0.0, $stock_produced - $stock_sold);
+
 $page_title = 'Milk Sales';
 $active_nav = 'milk_sales';
 require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
@@ -159,6 +185,22 @@ require_once dirname(__DIR__, 2) . '/includes/layout_header.php';
     <div class="stat-card"><div class="val"><?= number_format($totals['total_rev'], 0) ?></div><div class="lbl">Total Revenue (BDT)</div></div>
     <div class="stat-card"><div class="val"><?= number_format($totals['total_rev'] - $totals['total_paid'], 0) ?></div><div class="lbl">Outstanding (BDT)</div></div>
 </div>
+
+<!-- Today's milk stock summary -->
+<?php if ($stock_produced > 0): ?>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem">
+    <div class="stat-card"><div class="val"><?= number_format($stock_produced, 1) ?>L</div><div class="lbl">Produced Today</div></div>
+    <div class="stat-card"><div class="val"><?= number_format($stock_sold, 1) ?>L</div><div class="lbl">Sold Today</div></div>
+    <div class="stat-card" style="<?= $stock_available <= 0 ? 'background:#fff1f2;border-color:#ef4444' : 'background:#f0fdf4;border-color:#22c55e' ?>">
+        <div class="val" style="color:<?= $stock_available <= 0 ? '#dc2626' : '#16a34a' ?>"><?= number_format($stock_available, 1) ?>L</div>
+        <div class="lbl">Available Today</div>
+    </div>
+</div>
+<?php else: ?>
+<div style="background:#fefce8;border-left:3px solid #eab308;padding:.65rem 1rem;margin-bottom:1rem;font-size:.85rem;color:#713f12;border-radius:6px">
+    No milk production recorded for today. <a href="/modules/milk/record.php" style="font-weight:700">Record milk first →</a>
+</div>
+<?php endif; ?>
 
 <!-- Add Form -->
 <div class="card" style="margin-bottom:1.5rem">

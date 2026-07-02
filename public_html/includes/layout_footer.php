@@ -57,14 +57,16 @@
         }
     });
 
-    /* ── Auto-wrap tables for horizontal scroll on mobile ──────── */
-    if (window.innerWidth <= 600) {
-        document.querySelectorAll('.card table').forEach(function (tbl) {
+    /* ── Auto-wrap tables for horizontal scroll on mobile/tablet ── */
+    if (window.innerWidth <= 1024) {
+        document.querySelectorAll('table').forEach(function (tbl) {
             var parent = tbl.parentElement;
-            if (parent && !parent.classList.contains('table-responsive')) {
+            if (!parent) return;
+            var alreadyWrapped = parent.classList.contains('table-responsive') ||
+                                 parent.classList.contains('table-wrap');
+            if (!alreadyWrapped) {
                 var wrap = document.createElement('div');
-                wrap.style.overflowX = 'auto';
-                wrap.style.webkitOverflowScrolling = 'touch';
+                wrap.className = 'table-responsive';
                 parent.insertBefore(wrap, tbl);
                 wrap.appendChild(tbl);
             }

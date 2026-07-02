@@ -36,7 +36,8 @@ function finSummary(PDO $db, string $from, string $to): array {
     $q = $db->prepare("SELECT COALESCE(SUM(cost),0) FROM maintenance_logs WHERE {$ff} AND completed_date BETWEEN ? AND ?");
     $q->execute([$from,$to]); $exp_maint = (float)$q->fetchColumn();
 
-    $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE {$ff} AND type='expense' AND transaction_date BETWEEN ? AND ?");
+    // Exclude Equipment Purchase (capital asset) — it is CAPEX, not an operating expense
+    $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE {$ff} AND type='expense' AND category != 'Equipment Purchase' AND transaction_date BETWEEN ? AND ?");
     $q->execute([$from,$to]); $exp_manual = (float)$q->fetchColumn();
 
     // Worker salary proration (exact same logic as profit.php)

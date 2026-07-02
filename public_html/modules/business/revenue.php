@@ -60,8 +60,8 @@ $fc_total = $fc_table_exists
 
 $total_revenue = $rev_cow + $rev_meat + $rev_byproduct + $rev_milk + $rev_feed + $rev_medicine + $rev_equipment;
 
-// Total expenses from finance_transactions
-$total_expense = rev($db, "SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE farm_id=? AND type='expense' AND transaction_date BETWEEN ? AND ?", $fid, $from, $to);
+// Operating expenses — Equipment Purchase excluded (capital asset, not P&L expense)
+$total_expense = rev($db, "SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE farm_id=? AND type='expense' AND category != 'Equipment Purchase' AND transaction_date BETWEEN ? AND ?", $fid, $from, $to);
 $net_profit    = $total_revenue - $total_expense;
 
 // Monthly trend (last 6 months)
@@ -70,7 +70,7 @@ for ($i = 5; $i >= 0; $i--) {
     $m_from = date('Y-m-01', strtotime("-{$i} months"));
     $m_to   = date('Y-m-t',  strtotime("-{$i} months"));
     $m_rev  = rev($db, "SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE farm_id=? AND type='income' AND transaction_date BETWEEN ? AND ?", $fid, $m_from, $m_to);
-    $m_exp  = rev($db, "SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE farm_id=? AND type='expense' AND transaction_date BETWEEN ? AND ?", $fid, $m_from, $m_to);
+    $m_exp  = rev($db, "SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE farm_id=? AND type='expense' AND category != 'Equipment Purchase' AND transaction_date BETWEEN ? AND ?", $fid, $m_from, $m_to);
     $trend_rows[] = ['label' => date('M Y', strtotime($m_from)), 'revenue' => $m_rev, 'expense' => $m_exp];
 }
 

@@ -41,8 +41,8 @@ $med_alerts = (int)_kpi($db, "SELECT COUNT(*) FROM medicine_inventory WHERE {$ff
 // 9. Equipment under maintenance
 $equip_maint = (int)_kpi($db, "SELECT COUNT(*) FROM equipment WHERE {$ff} AND status='maintenance'");
 
-// 10. Net profit this month
-$net_profit = (float)_kpi($db, "SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END),0) FROM finance_transactions WHERE {$ff} AND MONTH(transaction_date)=MONTH(CURDATE()) AND YEAR(transaction_date)=YEAR(CURDATE())");
+// 10. Net profit this month (shared helper: finance_transactions + prorated worker salaries)
+$net_profit = calcFarmNetProfit($db, date('Y-m-01'), date('Y-m-t'));
 
 // 11. Damaged equipment
 $damaged_equipment = (int)_kpi($db, "SELECT COUNT(*) FROM equipment WHERE {$ff} AND status='damaged'");
@@ -57,7 +57,7 @@ try {
 } catch (PDOException $e) {}
 
 // 14. Previous month net profit
-$prev_month_profit = (float)_kpi($db, "SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END),0) FROM finance_transactions WHERE {$ff} AND MONTH(transaction_date)=MONTH(DATE_SUB(CURDATE(),INTERVAL 1 MONTH)) AND YEAR(transaction_date)=YEAR(DATE_SUB(CURDATE(),INTERVAL 1 MONTH))");
+$prev_month_profit = calcFarmNetProfit($db, date('Y-m-01', strtotime('first day of last month')), date('Y-m-t', strtotime('last day of last month')));
 
 jsonResponse([
     'total_cows'         => $total_cows,

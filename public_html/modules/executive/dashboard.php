@@ -26,37 +26,46 @@ $lw_to   = date('Y-m-d', strtotime('sunday last week'));
 function execFinancials(PDO $db, string $from, string $to): array {
     $ff = farmFilter();
 
-    $q = $db->prepare("SELECT COALESCE(SUM(milk_value),0) FROM milk_records WHERE {$ff} AND contamination_flag=0 AND DATE(recorded_at) BETWEEN ? AND ?");
-    $q->execute([$from, $to]); $rev_milk = (float)$q->fetchColumn();
+    // Single source of truth: finance_transactions — eliminates double-counting
+    $q = $db->prepare("
+        SELECT
+          COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END),0)                                                                                                 AS total_rev,
+          COALESCE(SUM(CASE WHEN type='expense' AND category != 'Equipment Purchase' THEN amount ELSE 0 END),0)                                                        AS total_exp_ledger,
+          COALESCE(SUM(CASE WHEN type='income'  AND category='Milk Sales'                                                           THEN amount ELSE 0 END),0)         AS rev_milk,
+          COALESCE(SUM(CASE WHEN type='income'  AND category IN ('Cow Sale','Cow Sales','Animal Sale')                              THEN amount ELSE 0 END),0)         AS rev_cow,
+          COALESCE(SUM(CASE WHEN type='income'  AND category IN ('Meat Sale','Meat Sales')                                         THEN amount ELSE 0 END),0)         AS rev_meat,
+          COALESCE(SUM(CASE WHEN type='expense' AND category='Veterinary Treatment'                                                 THEN amount ELSE 0 END),0)         AS exp_vet,
+          COALESCE(SUM(CASE WHEN type='expense' AND category IN ('Maintenance','Maintenance Cost','Equipment Maintenance','Equipment Repair') THEN amount ELSE 0 END),0) AS exp_maint,
+          COALESCE(SUM(CASE WHEN type='expense' AND category IN ('Salary','Payroll','Worker Salary')                                THEN amount ELSE 0 END),0)         AS exp_salary_ledger
+        FROM finance_transactions
+        WHERE {$ff} AND DATE(transaction_date) BETWEEN ? AND ?
+    ");
+    $q->execute([$from, $to]);
+    $row = $q->fetch(PDO::FETCH_ASSOC);
 
-    $q = $db->prepare("SELECT COALESCE(SUM(sale_price),0) FROM cow_sales WHERE {$ff} AND DATE(sale_date) BETWEEN ? AND ?");
-    $q->execute([$from, $to]); $rev_cow = (float)$q->fetchColumn();
+    $total_rev         = (float)$row['total_rev'];
+    $total_exp_ledger  = (float)$row['total_exp_ledger'];
+    $rev_milk          = (float)$row['rev_milk'];
+    $rev_cow           = (float)$row['rev_cow'];
+    $rev_meat          = (float)$row['rev_meat'];
+    $rev_other         = max(0.0, $total_rev - $rev_milk - $rev_cow - $rev_meat);
+    $exp_vet           = (float)$row['exp_vet'];
+    $exp_maint         = (float)$row['exp_maint'];
+    $exp_salary_ledger = (float)$row['exp_salary_ledger'];
 
-    $q = $db->prepare("SELECT COALESCE(SUM(total_revenue),0) FROM meat_sales WHERE {$ff} AND DATE(sale_date) BETWEEN ? AND ?");
-    $q->execute([$from, $to]); $rev_meat = (float)$q->fetchColumn();
-
-    $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE {$ff} AND type='income' AND DATE(transaction_date) BETWEEN ? AND ?");
-    $q->execute([$from, $to]); $rev_other = (float)$q->fetchColumn();
-
-    $q = $db->prepare("SELECT COALESCE(SUM(cost),0) FROM treatments WHERE {$ff} AND DATE(treatment_date) BETWEEN ? AND ?");
-    $q->execute([$from, $to]); $exp_vet = (float)$q->fetchColumn();
-
-    $q = $db->prepare("SELECT COALESCE(SUM(cost),0) FROM maintenance_logs WHERE {$ff} AND DATE(completed_date) BETWEEN ? AND ?");
-    $q->execute([$from, $to]); $exp_maint = (float)$q->fetchColumn();
-
-    $q = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE {$ff} AND type='expense' AND DATE(transaction_date) BETWEEN ? AND ?");
-    $q->execute([$from, $to]); $exp_other = (float)$q->fetchColumn();
-
-    $q = $db->prepare("SELECT salary, hire_date, termination_date FROM workers WHERE {$ff} AND hire_date <= ? AND (termination_date IS NULL OR termination_date >= ?)");
-    $q->execute([$to, $from]);
-    $period_days = max(1, (int)((strtotime($to) - strtotime($from)) / 86400) + 1);
-    $exp_salary  = 0.0;
-    foreach ($q->fetchAll() as $w) {
-        $exp_salary += ((float)$w['salary'] / 30) * $period_days;
+    // Use prorated worker salaries only when not already recorded in the ledger
+    $exp_salary = $exp_salary_ledger;
+    if ($exp_salary_ledger == 0.0) {
+        $period_days = max(1, (int)((strtotime($to) - strtotime($from)) / 86400) + 1);
+        $wq = $db->prepare("SELECT salary FROM workers WHERE {$ff} AND hire_date <= ? AND (termination_date IS NULL OR termination_date >= ?)");
+        $wq->execute([$to, $from]);
+        foreach ($wq->fetchAll() as $w) {
+            $exp_salary += ((float)$w['salary'] / 30) * $period_days;
+        }
     }
 
-    $total_rev = $rev_milk + $rev_cow + $rev_meat + $rev_other;
-    $total_exp = $exp_vet + $exp_maint + $exp_other + $exp_salary;
+    $exp_other = max(0.0, $total_exp_ledger - $exp_vet - $exp_maint - $exp_salary_ledger);
+    $total_exp = $total_exp_ledger - $exp_salary_ledger + $exp_salary;
     $net       = $total_rev - $total_exp;
 
     return compact(

@@ -1371,10 +1371,11 @@ tbody tr:hover { background: rgba(45,106,79,.03); }
     .filter-bar select { width: 100%; }
     .filter-bar .btn { width: 100%; justify-content: center; }
 
-    /* Table auto-scroll */
+    /* Table auto-scroll — scoped to table wrappers only, not card-header/footer */
     .card { overflow: hidden; }
-    .card table  { min-width: 420px; }
-    .card > div  { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .card table { min-width: 420px; }
+    .card .table-wrap,
+    .card .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
     /* Modals as bottom sheets */
     .modal { border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important; max-height: 92vh; }
@@ -1562,4 +1563,363 @@ tbody tr:hover { background: rgba(45,106,79,.03); }
         top: 0;
         z-index: 5;
     }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVENESS — TARGETED IMPROVEMENTS
+   320px / 380px / 480px / 600px / 768px
+   Layout & overflow ONLY — zero design or logic changes
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Global horizontal overflow guard ─────────────────────── */
+body   { overflow-x: hidden; }
+.layout, .main-content { max-width: 100%; }
+
+/* ── 2. Tables — universal horizontal scroll ─────────────────── */
+/* Guarantee ALL table wrappers scroll, not just .card > div */
+.table-wrap,
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+.table-wrap::-webkit-scrollbar,
+.table-responsive::-webkit-scrollbar { height: 4px; }
+.table-wrap::-webkit-scrollbar-thumb,
+.table-responsive::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Standalone tables outside .card get a wrapper behaviour */
+.table-wrap table,
+.table-responsive table { min-width: 480px; }
+
+/* ── 3. Canvas / charts never overflow their container ───────── */
+canvas { display: block; max-width: 100% !important; box-sizing: border-box; }
+
+/* ── 4. Tab nav — guaranteed horizontal scroll, no wrap ─────── */
+.tab-nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-wrap: nowrap;
+}
+.tab-nav::-webkit-scrollbar { display: none; }
+.tab-btn { flex-shrink: 0; }
+
+/* ── 5. filter-bar — always allow wrapping ───────────────────── */
+.filter-bar { flex-wrap: wrap; }
+
+/* ── 6. Table actions — allow wrap on any screen below desktop ── */
+@media (max-width: 1024px) {
+    .table-actions { flex-wrap: wrap; }
+}
+
+/* ── 7. Card header — allow wrapping at tablet/mobile ────────── */
+@media (max-width: 768px) {
+    .card-header { flex-wrap: wrap; gap: .4rem; }
+    .card-title  { flex: 1; min-width: 0; }
+
+    /* Topbar title — never overflow topbar */
+    .topbar-title {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: calc(100vw - 140px);
+    }
+
+    /* filter-bar children stretch full width */
+    .filter-bar form,
+    .filter-bar .search-input-wrap { width: 100%; flex: unset; }
+
+    /* Upgrade modal plans — single column */
+    .upgrade-modal-plans { grid-template-columns: 1fr; gap: .4rem; }
+}
+
+/* ── 8. ≤600px (mobile) — comprehensive fixes ───────────────── */
+@media (max-width: 600px) {
+
+    /* --- Tables --- */
+    /* Ensure every table inside a card can scroll */
+    .card { overflow: hidden; }
+    .card .table-wrap,
+    .card .table-responsive,
+    .card > div:not(.card-header):not(.card-body):not(.card-footer) {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    /* Minimum readable width for mobile tables */
+    .card table { min-width: 420px; }
+
+    /* --- Page header --- */
+    /* Direct btn children of page-header go full width */
+    .page-header > .btn,
+    .page-header > a.btn {
+        width: 100%;
+        justify-content: center;
+    }
+    /* When multiple action buttons live in a wrapper div */
+    .page-header > div:not(:first-child) {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+    }
+    .page-header > div:not(:first-child) > .btn,
+    .page-header > div:not(:first-child) > a.btn {
+        flex: 1;
+        min-width: 110px;
+        justify-content: center;
+    }
+
+    /* --- Card header action buttons --- */
+    .card-header > .btn,
+    .card-header > a.btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* --- Filter bar pills (status filters like on breeding/workers pages) --- */
+    .filter-bar { flex-direction: column; align-items: stretch; gap: .4rem; }
+    .filter-bar .btn  { width: 100%; justify-content: center; }
+    .filter-bar select,
+    .filter-bar .form-control { width: 100%; }
+
+    /* Horizontal-scrolling pill strip when there are many short pills */
+    .filter-pills {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: .35rem;
+        padding-bottom: .2rem;
+        scrollbar-width: none;
+    }
+    .filter-pills::-webkit-scrollbar { display: none; }
+    .filter-pills .btn,
+    .filter-pills a.btn { flex-shrink: 0; }
+
+    /* --- Forms --- */
+    .form-row { grid-template-columns: 1fr !important; }
+
+    /* --- Modals as bottom sheets --- */
+    .modal-backdrop { align-items: flex-end !important; padding: 0 !important; }
+    .modal {
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+        max-width: 100% !important;
+        max-height: 92vh;
+    }
+    .modal-body   { padding: 1rem; }
+    .modal-header { padding: 1rem 1.25rem; }
+    .modal-footer {
+        flex-wrap: wrap;
+        padding: .75rem 1rem;
+        gap: .4rem;
+    }
+    .modal-footer .btn { flex: 1; min-width: 100px; justify-content: center; }
+
+    /* --- Upgrade modal as bottom sheet --- */
+    .upgrade-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+    .upgrade-modal {
+        width: 100% !important;
+        border-radius: 16px 16px 0 0 !important;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 1.75rem 1.25rem 1.25rem;
+    }
+    .upgrade-modal-plans { grid-template-columns: 1fr; }
+
+    /* --- Toggle wrap rows (module settings page) --- */
+    .toggle-wrap { flex-wrap: wrap; gap: .5rem; }
+    .toggle-info { min-width: 0; flex: 1 1 200px; }
+    .toggle-name { word-break: break-word; }
+
+    /* --- Alert items --- */
+    .alert-item         { flex-wrap: wrap; }
+    .alert-item-actions { width: 100%; justify-content: flex-end; margin-top: .2rem; }
+
+    /* --- Timeline entries --- */
+    .timeline-content { word-break: break-word; }
+
+    /* --- Record cards (cow view tab panels) --- */
+    .record-card-header { flex-direction: column; align-items: flex-start; gap: .3rem; }
+
+    /* --- d-flex utility containers --- */
+    .d-flex.gap-1,
+    .d-flex.gap-2 { flex-wrap: wrap; }
+
+    /* --- Pagination touch targets --- */
+    .pagination     { gap: .2rem; }
+    .page-btn       { min-width: 38px !important; height: 38px !important; }
+
+    /* --- Impersonation banner --- */
+    .impersonation-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: .3rem;
+        padding: .4rem .875rem;
+        font-size: .76rem;
+    }
+    .impersonation-banner form { width: 100%; }
+    .impersonation-banner form button { width: 100%; justify-content: center; }
+
+    /* --- SaaS expiry banner --- */
+    .saas-banner { flex-wrap: wrap; gap: .35rem; font-size: .78rem; }
+
+    /* --- Cow actions wrap --- */
+    .cow-actions .btn { flex: 1 1 calc(50% - .25rem); min-width: 100px; }
+
+    /* --- Mini stats 2-col on mobile --- */
+    .mini-stats { grid-template-columns: repeat(2, 1fr); gap: .5rem; }
+}
+
+/* ── 9. ≤480px — tighter sizing ──────────────────────────────── */
+@media (max-width: 480px) {
+    .kpi-grid  { grid-template-columns: repeat(2, 1fr) !important; gap: .45rem; }
+    .kpi-card  { padding: .7rem .55rem; gap: .3rem; }
+    .kpi-value { font-size: 1.35rem; }
+    .kpi-icon  { width: 32px; height: 32px; }
+
+    .chart-wrap { height: 190px !important; padding: .6rem !important; }
+
+    /* table min-width shrinks for narrow phones */
+    .card table { min-width: 360px; }
+
+    /* Modal inner padding tighter */
+    .modal-body   { padding: .875rem; }
+    .modal-header { padding: .875rem 1rem; }
+
+    /* Auth page */
+    .auth-card { padding: 1.5rem 1rem; }
+    .auth-brand-icon { width: 58px; height: 58px; }
+
+    /* Topbar title tighter */
+    .topbar-title { max-width: calc(100vw - 120px); }
+
+    /* Table action buttons slightly smaller but still tappable */
+    .table-actions .btn-sm { min-height: 38px !important; min-width: 38px; }
+
+    /* Pagination */
+    .page-btn { min-width: 36px !important; height: 36px !important; }
+
+    /* Toggle wrap text smaller */
+    .toggle-desc  { font-size: .74rem; }
+}
+
+/* ── 10. ≤380px — very small phones (already in v2 but extended) */
+@media (max-width: 380px) {
+    html { font-size: 13px; }
+
+    .kpi-grid  { grid-template-columns: 1fr !important; }
+    .kpi-value { font-size: 1.3rem; }
+    .kpi-icon  { width: 30px; height: 30px; }
+    .kpi-card  { padding: .65rem .5rem; }
+
+    .chart-wrap { height: 175px !important; }
+
+    .card table { min-width: 320px; }
+
+    .topbar-title { max-width: calc(100vw - 100px); font-size: .85rem; }
+
+    .mini-stats { grid-template-columns: 1fr; }
+
+    .modal-body   { padding: .75rem; }
+    .modal-header { padding: .75rem; }
+    .modal-footer { padding: .65rem .75rem; }
+
+    .pagination { gap: .15rem; }
+    .page-btn   { min-width: 34px !important; height: 34px !important; font-size: .75rem; }
+
+    .upgrade-modal { padding: 1.5rem 1rem 1rem; }
+
+    .auth-card { padding: 1.25rem .875rem; }
+
+    h2 { font-size: 1.1rem; }
+    h3 { font-size: .95rem; }
+
+    /* Bottom nav labels — tighter */
+    .bn-label { font-size: .52rem; }
+
+    /* Page content bottom padding */
+    .page-content {
+        padding: .75rem .75rem calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 8px) + .5rem) !important;
+    }
+}
+
+/* ── 11. ≤320px — oldest small phones (iPhone SE gen 1, etc.) ── */
+@media (max-width: 320px) {
+    html { font-size: 12px; }
+
+    /* KPI — single column */
+    .kpi-grid  { grid-template-columns: 1fr !important; }
+    .kpi-card  { padding: .6rem .45rem; gap: .25rem; }
+    .kpi-value { font-size: 1.2rem; }
+    .kpi-icon  { width: 28px; height: 28px; }
+    .kpi-label { font-size: .68rem; }
+
+    /* Chart */
+    .chart-wrap { height: 160px !important; padding: .5rem !important; }
+    .chart-grid { gap: .5rem; }
+
+    /* Topbar */
+    .topbar       { padding: 0 .6rem; gap: .4rem; }
+    .topbar-title { max-width: calc(100vw - 90px); font-size: .8rem; }
+
+    /* Buttons */
+    .btn    { padding: .45rem .7rem; font-size: .78rem; }
+    .btn-sm { padding: .25rem .45rem; font-size: .7rem; min-height: 36px !important; }
+    .btn-lg { padding: .6rem 1.25rem; font-size: .9rem; }
+
+    /* Cards */
+    .card-body   { padding: .65rem; }
+    .card-header { padding: .6rem .65rem; }
+
+    /* Table */
+    .card table { min-width: 280px; }
+    .table-actions .btn-sm { min-height: 34px !important; min-width: 34px; padding: .25rem .35rem; }
+
+    /* Typography */
+    h1 { font-size: 1.25rem; }
+    h2 { font-size: 1rem; }
+    h3 { font-size: .88rem; }
+
+    /* Sidebar — narrowest overlay */
+    .sidebar { width: min(260px, 90vw); }
+
+    /* Modals */
+    .modal-body   { padding: .65rem; }
+    .modal-header { padding: .7rem .65rem; }
+    .modal-footer { padding: .55rem .65rem; }
+
+    /* Upgrade modal */
+    .upgrade-modal { padding: 1.25rem .875rem 1rem; }
+
+    /* Pagination */
+    .page-btn { min-width: 30px !important; height: 30px !important; font-size: .7rem; }
+
+    /* Mini stats */
+    .mini-stats { grid-template-columns: 1fr !important; }
+
+    /* Bottom nav */
+    .bottom-nav-item .bn-icon svg { width: 18px; height: 18px; }
+    .bn-label { font-size: .48rem; }
+
+    /* Auth */
+    .auth-card      { padding: 1.25rem .75rem; }
+    .auth-brand-icon { width: 52px; height: 52px; }
+    .auth-brand-name { font-size: .95rem; }
+
+    /* Filter pills — full width each on 320px */
+    .filter-pills .btn,
+    .filter-pills a.btn { flex: 1 1 100%; }
+
+    /* Page content extra padding for bottom nav */
+    .page-content {
+        padding: .6rem .6rem calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 8px) + .35rem) !important;
+    }
+
+    /* Cow profile */
+    .cow-photo  { width: 60px; height: 60px; font-size: 1.5rem; }
+    .cow-actions .btn { flex: 1 1 100%; }
+    .cow-tag    { font-size: 1.1rem; }
 }

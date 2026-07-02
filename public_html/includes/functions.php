@@ -208,3 +208,30 @@ function getUnreadAlertCount(): int {
         return 0;
     }
 }
+
+function calcFarmNetProfit(PDO $db, string $from, string $to): float {
+    $ff = farmFilter();
+
+    // Equipment Purchase is a capital expenditure (asset acquisition), not an operating expense.
+    // Exclude it from P&L so buying equipment does not reduce reported net profit.
+    $q = $db->prepare("SELECT COALESCE(SUM(
+        CASE WHEN type='income' THEN amount
+             WHEN type='expense' AND category != 'Equipment Purchase' THEN -amount
+             ELSE 0 END
+    ),0) FROM finance_transactions WHERE {$ff} AND DATE(transaction_date) BETWEEN ? AND ?");
+    $q->execute([$from, $to]);
+    $ledger_net = (float)$q->fetchColumn();
+
+    $sq = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE {$ff} AND type='expense' AND category IN ('Salary','Payroll','Worker Salary') AND DATE(transaction_date) BETWEEN ? AND ?");
+    $sq->execute([$from, $to]);
+    $salary_in_ledger = (float)$sq->fetchColumn();
+
+    if ($salary_in_ledger == 0.0) {
+        $period_days = max(1, (int)((strtotime($to) - strtotime($from)) / 86400) + 1);
+        $wq = $db->prepare("SELECT COALESCE(SUM(salary),0) FROM workers WHERE {$ff} AND hire_date <= ? AND (termination_date IS NULL OR termination_date >= ?)");
+        $wq->execute([$to, $from]);
+        $ledger_net -= ((float)$wq->fetchColumn() / 30) * $period_days;
+    }
+
+    return $ledger_net;
+}

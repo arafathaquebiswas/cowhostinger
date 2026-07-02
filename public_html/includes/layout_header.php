@@ -114,7 +114,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
         transition:max-height .24s ease, padding .18s ease;
     }
     .nav-acc.open>.nav-acc-body{
-        max-height:640px;
+        max-height:2000px; /* CSS fallback — JS overrides with exact scrollHeight */
         padding:.1rem 0 .3rem;
     }
     /* sub-items inside accordion */
@@ -154,34 +154,63 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
     .qaf.customizing .qaf-item.qaf-on .qaf-chk{background:#2D6A4F;border-color:#2D6A4F;color:#fff}
     </style>
     <script>
+    // Measure true content height regardless of max-height constraint
+    function _bodyHeight(body) {
+        body.style.transition = 'none';
+        body.style.maxHeight  = 'none';
+        var h = body.scrollHeight;
+        body.style.maxHeight  = '';
+        body.style.transition = '';
+        void body.offsetHeight; // force reflow so reset is applied before next paint
+        return h;
+    }
+    function _accOpen(el) {
+        el.classList.add('open');
+        var body = el.querySelector('.nav-acc-body');
+        if (!body) return;
+        var h = _bodyHeight(body);
+        body.style.maxHeight = h + 'px';
+    }
+    function _accClose(el) {
+        el.classList.remove('open');
+        var body = el.querySelector('.nav-acc-body');
+        if (!body) return;
+        // Anchor from current rendered height so transition plays from real value
+        body.style.maxHeight = body.scrollHeight + 'px';
+        void body.offsetHeight;
+        body.style.maxHeight = '';
+    }
     // Single-open accordion: closes all others before opening the clicked section
     function toggleAcc(id) {
         var el = document.getElementById(id);
         if (!el) return;
         var opening = !el.classList.contains('open');
-        // Close every accordion section
-        document.querySelectorAll('.nav-acc').forEach(function(acc) {
-            acc.classList.remove('open');
-        });
-        // Open the target if it was closed
-        if (opening) el.classList.add('open');
-        // Persist: store at most one open id (or empty)
+        document.querySelectorAll('.nav-acc').forEach(function(acc) { _accClose(acc); });
+        if (opening) _accOpen(el);
         try {
             var s = {};
             if (opening) s[id] = true;
             localStorage.setItem('_farm_nav', JSON.stringify(s));
         } catch(e){}
     }
-    // On load: restore one section from localStorage only if PHP has none already open
+    // On load: set exact height for the server-rendered open section (no animation needed).
+    // CSS fallback max-height:2000px already shows content; this just tightens it.
     document.addEventListener('DOMContentLoaded', function() {
         var alreadyOpen = document.querySelector('.nav-acc.open');
-        if (!alreadyOpen) {
+        if (alreadyOpen) {
+            var body = alreadyOpen.querySelector('.nav-acc-body');
+            if (body) {
+                body.style.transition = 'none';
+                body.style.maxHeight  = body.scrollHeight + 'px';
+                body.style.transition = '';
+            }
+        } else {
             try {
                 var s = JSON.parse(localStorage.getItem('_farm_nav') || '{}');
                 var keys = Object.keys(s).filter(function(k) { return s[k]; });
                 if (keys.length > 0) {
-                    var el = document.getElementById(keys[0]);
-                    if (el) el.classList.add('open');
+                    var restored = document.getElementById(keys[0]);
+                    if (restored) _accOpen(restored);
                 }
             } catch(e){}
         }
@@ -296,7 +325,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
         <a href="/modules/subscription/index.php" class="btn btn-upgrade btn-block">
             View Plans &amp; Upgrade
         </a>
-        <p style="font-size:.75rem;color:#9CA3AF;margin:.75rem 0 0">Contact AB IT: <strong>support@abit.com.bd</strong></p>
+        <p style="font-size:.75rem;color:#9CA3AF;margin:.75rem 0 0">Contact AB IT: <strong>arafathaquebiswas@gmail.com</strong></p>
     </div>
 </div>
 
@@ -547,7 +576,7 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                  📊  FINANCE & REPORTS
                  ══════════════════════════════════════════════════ -->
             <?php if ($_can(['admin','manager','accountant'])): ?>
-            <div class="nav-acc<?= $_acc(['finance','finance_summary','finance_charts','reports','profit_engine','profit_monthly','profit_yearly','profit_compare','profitability']) ?>" id="nacc-finance">
+            <div class="nav-acc<?= $_acc(['finance','finance_summary','finance_charts','reports','profit_engine','profit_monthly','profit_yearly','profit_compare','profitability','waste','waste_milk','waste_feed','waste_medicine','waste_animal','waste_equipment','waste_other','financial_report']) ?>" id="nacc-finance">
                 <button class="nav-acc-hdr" onclick="toggleAcc('nacc-finance')">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                     Finance &amp; Reports
@@ -565,9 +594,25 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                     <?php else: ?>
                     <?= lockedNavItem('Finance', '', 'Finance module') ?>
                     <?php endif; ?>
+                    <div style="font-size:.65rem;color:rgba(255,255,255,.3);padding:.4rem .75rem .1rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Waste &amp; Losses</div>
+                    <a href="/modules/waste/index.php" class="nav-item<?= $_nav_active('waste') ?>" style="color:rgba(252,165,165,.85)">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        Waste &amp; Loss Tracker
+                    </a>
+                    <a href="/modules/waste/milk.php" class="nav-item<?= $_nav_active('waste_milk') ?>" style="padding-left:2rem;font-size:.8rem;opacity:.85">🥛 Milk Waste</a>
+                    <a href="/modules/waste/feed.php" class="nav-item<?= $_nav_active('waste_feed') ?>" style="padding-left:2rem;font-size:.8rem;opacity:.85">🌾 Feed Waste</a>
+                    <a href="/modules/waste/medicine.php" class="nav-item<?= $_nav_active('waste_medicine') ?>" style="padding-left:2rem;font-size:.8rem;opacity:.85">💊 Medicine Waste</a>
+                    <a href="/modules/waste/animal.php" class="nav-item<?= $_nav_active('waste_animal') ?>" style="padding-left:2rem;font-size:.8rem;opacity:.85">🐄 Animal Waste</a>
+                    <a href="/modules/waste/equipment.php" class="nav-item<?= $_nav_active('waste_equipment') ?>" style="padding-left:2rem;font-size:.8rem;opacity:.85">⚙️ Equipment Damage</a>
+                    <a href="/modules/waste/other.php" class="nav-item<?= $_nav_active('waste_other') ?>" style="padding-left:2rem;font-size:.8rem;opacity:.85">💸 Other Loss</a>
                     <?php if ($_module_enabled('reports') && canAccess('report.view')): ?>
+                    <div style="font-size:.65rem;color:rgba(255,255,255,.3);padding:.4rem .75rem .1rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Reports</div>
                     <a href="/modules/reports/index.php" class="nav-item<?= $_nav_active('reports') ?>">Reports</a>
                     <a href="/modules/reports/profitability.php" class="nav-item<?= $_nav_active('profitability') ?>">Profitability</a>
+                    <a href="/modules/reports/financial_report.php" class="nav-item<?= $_nav_active('financial_report') ?>" style="color:rgba(167,243,208,.85)">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        PDF Financial Report
+                    </a>
                     <?php else: ?>
                     <?= lockedNavItem('Reports', '', 'Reports & Exports') ?>
                     <?php endif; ?>
@@ -737,6 +782,12 @@ $_acc = function (array $keys) use ($_active_nav_str): string {
                 <?php endif; ?>
                 <?php if ($_can(['admin','accountant','manager']) && $_module_enabled('finance')): ?>
                 <a href="/modules/finance/summary.php" class="qaf-item" data-qaf-id="fin_summary"><span class="qaf-chk">✓</span><span class="qaf-ico">💰</span> Financial Summary</a>
+                <?php endif; ?>
+                <?php if ($_can(['admin','manager','accountant','veterinarian','worker'])): ?>
+                <a href="/modules/waste/index.php" class="qaf-item" data-qaf-id="waste"><span class="qaf-chk">✓</span><span class="qaf-ico">🗑</span> Log Waste / Loss</a>
+                <?php endif; ?>
+                <?php if ($_can(['admin','manager','accountant'])): ?>
+                <a href="/modules/reports/financial_report.php" class="qaf-item" data-qaf-id="pdf_report"><span class="qaf-chk">✓</span><span class="qaf-ico">📄</span> PDF Report</a>
                 <?php endif; ?>
                 <?php if ($_can(['worker'])): ?>
                 <a href="/modules/workers/my_tasks.php" class="qaf-item" data-qaf-id="tasks"><span class="qaf-chk">✓</span><span class="qaf-ico">✅</span> My Tasks</a>
